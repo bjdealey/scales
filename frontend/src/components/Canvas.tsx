@@ -11,7 +11,7 @@ export default function Canvas() {
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 flex-shrink-0">
         <div>
           <p className="text-sm font-semibold text-gray-300">Canvas</p>
-          <p className="text-xs text-gray-600">{blocks.length} block{blocks.length !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-gray-600">{blocks.length} scale{blocks.length !== 1 ? 's' : ''}</p>
         </div>
         {blocks.length > 0 && (
           <button
@@ -29,9 +29,9 @@ export default function Canvas() {
             <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mb-4">
               <Zap size={32} className="text-gray-500" />
             </div>
-            <p className="text-gray-400 font-medium mb-1">No blocks yet</p>
+            <p className="text-gray-400 font-medium mb-1">No scales yet</p>
             <p className="text-gray-600 text-sm max-w-xs">
-              Click a block type in the left panel to start building your automation script
+              Add a scale from the left panel — your Python script assembles here as you go
             </p>
           </div>
         ) : (

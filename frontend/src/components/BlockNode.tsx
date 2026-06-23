@@ -23,7 +23,7 @@ function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolea
           onClick={() => setOpen(true)}
           className="w-full text-xs text-gray-600 hover:text-gray-400 border border-dashed border-gray-700 hover:border-gray-500 rounded px-2 py-1 transition-colors text-left"
         >
-          + Add block{inElse ? ' (else)' : ''}
+          + Add scale{inElse ? ' (else)' : ''}
         </button>
       ) : (
         <div className="border border-gray-600 rounded bg-gray-900 p-2">

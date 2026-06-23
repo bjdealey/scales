@@ -82,7 +82,7 @@ export default function App() {
           <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center flex-shrink-0">
             <Zap size={12} className="text-white" />
           </div>
-          <h1 className="font-bold text-sm text-white">Python Flow Builder</h1>
+          <h1 className="font-bold text-sm text-white">Scales</h1>
         </div>
 
         <button

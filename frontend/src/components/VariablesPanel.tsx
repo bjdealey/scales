@@ -315,7 +315,7 @@ export default function VariablesPanel() {
           <div className="text-center py-12 px-4">
             <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center mx-auto mb-3"><Package size={20} className="text-gray-500" /></div>
             <p className="text-gray-400 text-sm font-medium mb-1">No variables yet</p>
-            <p className="text-gray-600 text-xs leading-relaxed">Variables are declared at the top of your script</p>
+            <p className="text-gray-600 text-xs leading-relaxed">Set your values here — they appear at the top of your generated script</p>
           </div>
         )}
 

@@ -33,6 +33,11 @@ const BLOCK_TYPES: BlockType[] = [
 
 type Tab = 'blocks' | 'variables';
 
+const TAB_LABELS: Record<Tab, string> = {
+  variables: 'Variables',
+  blocks: 'Scales',
+};
+
 export default function BlockPalette() {
   const [tab, setTab] = useState<Tab>('variables');
   const addBlock = useBlockStore((s) => s.addBlock);
@@ -51,7 +56,7 @@ export default function BlockPalette() {
                 : 'text-gray-500 hover:text-gray-300'
             }`}
           >
-            {t}
+            {TAB_LABELS[t]}
             {t === 'variables' && variableCount > 0 && (
               <span className="ml-1.5 text-xs bg-gray-700 text-gray-400 rounded-full px-1.5 py-0.5">
                 {variableCount}
@@ -66,7 +71,7 @@ export default function BlockPalette() {
       ) : (
         <>
           <div className="px-3 py-2 border-b border-gray-700 flex-shrink-0">
-            <p className="text-xs text-gray-600">Click to add to canvas</p>
+            <p className="text-xs text-gray-600">Click a scale to add it to your script</p>
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
             {BLOCK_TYPES.map((type) => {

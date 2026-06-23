@@ -58,8 +58,8 @@ export default function CodePreview() {
     <aside className="w-full h-full bg-gray-900 flex flex-col overflow-hidden">
       <div className="px-3 py-2 border-b border-gray-700 flex items-center justify-between flex-shrink-0">
         <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Generated Python</p>
-          <p className="text-xs text-gray-600">Updates live as you build</p>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Your Python Script</p>
+          <p className="text-xs text-gray-600">Assembles as you add scales</p>
         </div>
         <div className="flex items-center gap-2">
           <button
