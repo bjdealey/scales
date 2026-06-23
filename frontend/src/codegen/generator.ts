@@ -1,0 +1,144 @@
+import { Block, BlockType, Variable, DictEntry, ListItem, PrimitiveType } from '../types';
+
+function collectImports(blocks: Block[]): Set<string> {
+  const imports = new Set<string>();
+  function scan(block: Block) {
+    if (block.type === 'http_request') imports.add('requests');
+    block.children.forEach(scan);
+    block.elseChildren.forEach(scan);
+  }
+  blocks.forEach(scan);
+  return imports;
+}
+
+function generateBlock(block: Block, indent: number): string {
+  const pad = '    '.repeat(indent);
+  const pad1 = '    '.repeat(indent + 1);
+
+  switch (block.type as BlockType) {
+    case 'http_request': {
+      const { method = 'GET', url = '"https://example.com"', varName = 'response', body } = block.params;
+      const m = method.toLowerCase();
+      const bodyArg = body && ['post', 'put', 'patch'].includes(m) ? `, json=${body}` : '';
+      return `${pad}${varName} = requests.${m}(${url}${bodyArg})`;
+    }
+
+    case 'set_variable': {
+      const { name = 'variable', value = 'None' } = block.params;
+      return `${pad}${name} = ${value}`;
+    }
+
+    case 'for_each': {
+      const { itemVar = 'item', iterable = '[]' } = block.params;
+      const body =
+        block.children.length > 0
+          ? block.children.map((c) => generateBlock(c, indent + 1)).join('\n')
+          : `${pad1}pass`;
+      return `${pad}for ${itemVar} in ${iterable}:\n${body}`;
+    }
+
+    case 'if_condition': {
+      const { condition = 'True' } = block.params;
+      const body =
+        block.children.length > 0
+          ? block.children.map((c) => generateBlock(c, indent + 1)).join('\n')
+          : `${pad1}pass`;
+      let code = `${pad}if ${condition}:\n${body}`;
+      if (block.elseChildren.length > 0) {
+        const elseBody = block.elseChildren.map((c) => generateBlock(c, indent + 1)).join('\n');
+        code += `\n${pad}else:\n${elseBody}`;
+      }
+      return code;
+    }
+
+    case 'print': {
+      const { expression = '""' } = block.params;
+      return `${pad}print(${expression})`;
+    }
+
+    case 'file_write': {
+      const { path = '"output.txt"', content = '""' } = block.params;
+      return `${pad}with open(${path}, 'w') as f:\n${pad1}f.write(str(${content}))`;
+    }
+
+    default:
+      return `${pad}pass`;
+  }
+}
+
+function escapeStr(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function formatPrimitive(type: PrimitiveType, value: string): string {
+  switch (type) {
+    case 'str': return `"${escapeStr(value)}"`;
+    case 'int': return value.trim() || '0';
+    case 'float': { const f = value.trim() || '0.0'; return f.includes('.') ? f : `${f}.0`; }
+    case 'bool': return value === 'False' ? 'False' : 'True';
+  }
+}
+
+function formatValue(v: Variable): string {
+  switch (v.type) {
+    case 'str':
+      return `"${escapeStr(v.value)}"`;
+    case 'int':
+      return v.value.trim() || '0';
+    case 'float': {
+      const f = v.value.trim() || '0.0';
+      return f.includes('.') ? f : `${f}.0`;
+    }
+    case 'bool':
+      return v.value === 'False' ? 'False' : 'True';
+    case 'list': {
+      if (v.items.length === 0) return '[]';
+      return `[${v.items.map((item: ListItem) => formatPrimitive(item.type, item.value)).join(', ')}]`;
+    }
+    case 'dict': {
+      const valid = v.entries.filter((e: DictEntry) => e.key.trim());
+      if (valid.length === 0) return '{}';
+      const pairs = valid.map((e: DictEntry) => `"${escapeStr(e.key)}": ${formatPrimitive(e.valueType, e.value)}`);
+      return `{${pairs.join(', ')}}`;
+    }
+    case 'None':
+      return 'None';
+    case 'Any':
+      return v.value.trim() || 'None';
+  }
+}
+
+function generateVariables(variables: Variable[]): string {
+  return variables
+    .filter((v) => v.name.trim())
+    .map((v) => {
+      const typed = v.type !== 'None' && v.type !== 'Any';
+      let annotation: string;
+      if (v.constant) {
+        annotation = typed ? `: Final[${v.type}]` : ': Final';
+      } else {
+        annotation = typed ? `: ${v.type}` : '';
+      }
+      return `${v.name}${annotation} = ${formatValue(v)}`;
+    })
+    .join('\n');
+}
+
+export function generatePython(blocks: Block[], variables: Variable[] = []): string {
+  const namedVars = variables.filter((v) => v.name.trim());
+  if (blocks.length === 0 && namedVars.length === 0) {
+    return '# Add variables or blocks to generate Python code';
+  }
+
+  const imports = collectImports(blocks);
+  const stdImports = [...imports].map((m) => `import ${m}`);
+  const needsFinal = namedVars.some((v) => v.constant);
+  if (needsFinal) stdImports.unshift('from typing import Final');
+  const importLines = stdImports.join('\n');
+  const varLines = generateVariables(variables);
+  const codeLines = blocks.map((b) => generateBlock(b, 0)).join('\n');
+
+  return [importLines || null, varLines || null, codeLines || null]
+    .filter(Boolean)
+    .join('\n\n');
+}

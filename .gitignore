@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Python
+backend/__pycache__/
+backend/*.pyc
+backend/.venv/
+backend/venv/
+*.egg-info/
+.env
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Claude Code
+.claude/
