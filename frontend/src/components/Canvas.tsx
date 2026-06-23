@@ -1,3 +1,4 @@
+import { Zap } from 'lucide-react';
 import { useBlockStore } from '../store/blockStore';
 import BlockNode from './BlockNode';
 
@@ -25,8 +26,8 @@ export default function Canvas() {
       <div className="flex-1 p-4">
         {blocks.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center text-2xl mb-4">
-              ⚡
+            <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mb-4">
+              <Zap size={32} className="text-gray-500" />
             </div>
             <p className="text-gray-400 font-medium mb-1">No blocks yet</p>
             <p className="text-gray-600 text-sm max-w-xs">

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Check, Copy, Play, X } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { useBlockStore } from '../store/blockStore';
 import { generatePython } from '../codegen/generator';
@@ -63,16 +64,18 @@ export default function CodePreview() {
         <div className="flex items-center gap-2">
           <button
             onClick={handleCopy}
-            className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 transition-colors"
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 transition-colors"
           >
-            {copied ? '✓ Copied' : 'Copy'}
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+            {copied ? 'Copied' : 'Copy'}
           </button>
           <button
             onClick={handleRun}
             disabled={running || (blocks.length === 0 && variables.filter((v) => v.name.trim()).length === 0)}
-            className="text-xs text-white px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold"
+            className="flex items-center gap-1.5 text-xs text-white px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold"
           >
-            {running ? 'Running…' : '▶ Run'}
+            <Play size={12} />
+            {running ? 'Running…' : 'Run'}
           </button>
         </div>
       </div>
@@ -111,9 +114,9 @@ export default function CodePreview() {
               </span>
               <button
                 onClick={() => setResult(null)}
-                className="ml-auto text-xs text-gray-600 hover:text-gray-400"
+                className="ml-auto text-gray-600 hover:text-gray-400"
               >
-                ✕
+                <X size={14} />
               </button>
             </div>
             {result.stdout && (

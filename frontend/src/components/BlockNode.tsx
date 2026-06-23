@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ArrowUp, ArrowDown, X } from 'lucide-react';
 import { Block, BlockType, BLOCK_META } from '../types';
 import { useBlockStore } from '../store/blockStore';
 
@@ -221,23 +222,23 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
             <button
               onClick={() => moveBlock(block.id, 'up')}
               title="Move up"
-              className="text-white/50 hover:text-white text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition-colors"
+              className="text-white/50 hover:text-white w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition-colors"
             >
-              ↑
+              <ArrowUp size={12} />
             </button>
             <button
               onClick={() => moveBlock(block.id, 'down')}
               title="Move down"
-              className="text-white/50 hover:text-white text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition-colors"
+              className="text-white/50 hover:text-white w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition-colors"
             >
-              ↓
+              <ArrowDown size={12} />
             </button>
             <button
               onClick={() => removeBlock(block.id)}
               title="Remove block"
-              className="text-white/50 hover:text-red-300 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition-colors ml-1"
+              className="text-white/50 hover:text-red-300 w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition-colors ml-1"
             >
-              ✕
+              <X size={12} />
             </button>
           </div>
         </div>

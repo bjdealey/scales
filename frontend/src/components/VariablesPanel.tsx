@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUp, ArrowDown, ChevronUp, ChevronDown, X, Lock, Package } from 'lucide-react';
 import { Variable, PythonType, PYTHON_TYPES, TYPE_LABELS, SortMode, ListItem, DictEntry, PRIMITIVE_TYPES, PRIMITIVE_SHORT, PRIMITIVE_DEFAULTS } from '../types';
 import { useBlockStore } from '../store/blockStore';
 
@@ -97,9 +98,9 @@ function ValueEditor({ variable: v, locked }: { variable: Variable; locked: bool
               {!locked && (
                 <div className="flex flex-col gap-px flex-shrink-0 opacity-0 group-hover/row:opacity-100 transition-opacity">
                   <button onClick={() => moveListItem(v.id, idx, 'up')} disabled={idx === 0}
-                    className="text-gray-600 hover:text-gray-300 disabled:opacity-20 w-4 h-4 flex items-center justify-center rounded text-xs">↑</button>
+                    className="text-gray-600 hover:text-gray-300 disabled:opacity-20 w-4 h-4 flex items-center justify-center rounded"><ArrowUp size={10} /></button>
                   <button onClick={() => moveListItem(v.id, idx, 'down')} disabled={idx === v.items.length - 1}
-                    className="text-gray-600 hover:text-gray-300 disabled:opacity-20 w-4 h-4 flex items-center justify-center rounded text-xs">↓</button>
+                    className="text-gray-600 hover:text-gray-300 disabled:opacity-20 w-4 h-4 flex items-center justify-center rounded"><ArrowDown size={10} /></button>
                 </div>
               )}
               <select
@@ -132,8 +133,8 @@ function ValueEditor({ variable: v, locked }: { variable: Variable; locked: bool
               )}
               {!locked && (
                 <button onClick={() => removeListItem(v.id, idx)}
-                  className="text-gray-600 hover:text-red-400 w-6 h-6 flex items-center justify-center rounded hover:bg-gray-700 flex-shrink-0 text-xs transition-colors opacity-0 group-hover/row:opacity-100"
-                >✕</button>
+                  className="text-gray-600 hover:text-red-400 w-6 h-6 flex items-center justify-center rounded hover:bg-gray-700 flex-shrink-0 transition-colors opacity-0 group-hover/row:opacity-100"
+                ><X size={12} /></button>
               )}
             </div>
           ))}
@@ -159,11 +160,11 @@ function ValueEditor({ variable: v, locked }: { variable: Variable; locked: bool
                 {!locked && (
                   <div className="flex gap-px opacity-0 group-hover/row:opacity-100 transition-opacity flex-shrink-0">
                     <button onClick={() => moveDictEntry(v.id, idx, 'up')} disabled={idx === 0}
-                      className="text-gray-600 hover:text-gray-300 disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded text-xs">↑</button>
+                      className="text-gray-600 hover:text-gray-300 disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded"><ArrowUp size={12} /></button>
                     <button onClick={() => moveDictEntry(v.id, idx, 'down')} disabled={idx === v.entries.length - 1}
-                      className="text-gray-600 hover:text-gray-300 disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded text-xs">↓</button>
+                      className="text-gray-600 hover:text-gray-300 disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded"><ArrowDown size={12} /></button>
                     <button onClick={() => removeDictEntry(v.id, idx)}
-                      className="text-gray-600 hover:text-red-400 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-700 text-xs transition-colors">✕</button>
+                      className="text-gray-600 hover:text-red-400 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-700 transition-colors"><X size={12} /></button>
                   </div>
                 )}
               </div>
@@ -312,7 +313,7 @@ export default function VariablesPanel() {
       <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
         {variables.length === 0 && (
           <div className="text-center py-12 px-4">
-            <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center text-lg mx-auto mb-3">📦</div>
+            <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center mx-auto mb-3"><Package size={20} className="text-gray-500" /></div>
             <p className="text-gray-400 text-sm font-medium mb-1">No variables yet</p>
             <p className="text-gray-600 text-xs leading-relaxed">Variables are declared at the top of your script</p>
           </div>
@@ -338,7 +339,7 @@ export default function VariablesPanel() {
                   className="flex items-center gap-2 flex-1 min-w-0 text-left"
                 >
                   {v.locked && (
-                    <span className="text-amber-500/70 text-xs flex-shrink-0" title="Locked">🔒</span>
+                    <Lock size={11} className="text-amber-500/70 flex-shrink-0" />
                   )}
                   <span className={`flex-1 min-w-0 text-sm font-mono truncate ${v.locked ? 'text-gray-400' : 'text-white'}`}>
                     {v.name || <span className="text-gray-600">Unnamed</span>}
@@ -359,15 +360,15 @@ export default function VariablesPanel() {
                     <button
                       onClick={() => moveVariable(v.id, 'up')}
                       disabled={idx === 0}
-                      className="text-gray-400 hover:text-white disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-600 text-xs transition-colors flex-shrink-0"
+                      className="text-gray-400 hover:text-white disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-600 transition-colors flex-shrink-0"
                       title="Move up"
-                    >↑</button>
+                    ><ArrowUp size={12} /></button>
                     <button
                       onClick={() => moveVariable(v.id, 'down')}
                       disabled={idx === sortedVariables.length - 1}
-                      className="text-gray-400 hover:text-white disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-600 text-xs transition-colors flex-shrink-0"
+                      className="text-gray-400 hover:text-white disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-600 transition-colors flex-shrink-0"
                       title="Move down"
-                    >↓</button>
+                    ><ArrowDown size={12} /></button>
                   </>
                 )}
                 {!v.locked && (
@@ -381,8 +382,8 @@ export default function VariablesPanel() {
                   ) : (
                     <button
                       onMouseDown={(e) => handleDelete(e, v.id)}
-                      className="text-gray-600 hover:text-red-400 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-700 text-xs transition-colors flex-shrink-0"
-                    >✕</button>
+                      className="text-gray-600 hover:text-red-400 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-700 transition-colors flex-shrink-0"
+                    ><X size={12} /></button>
                   )
                 )}
 
@@ -403,7 +404,7 @@ export default function VariablesPanel() {
                   onClick={() => toggle(v.id)}
                   className="text-gray-600 hover:text-gray-300 w-5 h-5 flex items-center justify-center text-xs flex-shrink-0 transition-colors"
                 >
-                  {isExpanded ? '▴' : '▾'}
+                  {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
               </div>
 

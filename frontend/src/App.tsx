@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
+import { Zap, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import BlockPalette from './components/BlockPalette';
 import Canvas from './components/Canvas';
 import CodePreview from './components/CodePreview';
@@ -73,13 +74,13 @@ export default function App() {
           }`}
           title={leftVisible ? 'Hide sidebar' : 'Show sidebar'}
         >
-          <span>{leftVisible ? '◀' : '▶'}</span>
+          {leftVisible ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
           <span className="hidden sm:inline">{leftVisible ? 'Hide' : 'Sidebar'}</span>
         </button>
 
         <div className="flex items-center gap-2 flex-1 justify-center">
-          <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center text-xs flex-shrink-0">
-            ⚡
+          <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center flex-shrink-0">
+            <Zap size={12} className="text-white" />
           </div>
           <h1 className="font-bold text-sm text-white">Python Flow Builder</h1>
         </div>
@@ -93,8 +94,8 @@ export default function App() {
           }`}
           title={rightVisible ? 'Hide code panel' : 'Show code panel'}
         >
-          <span className="hidden sm:inline">{rightVisible ? 'Code' : 'Code'}</span>
-          <span>{rightVisible ? '▶' : '◀'}</span>
+          <span className="hidden sm:inline">Code</span>
+          {rightVisible ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
         </button>
       </header>
 

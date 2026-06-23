@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Globe, Package, Repeat2, GitBranch, Terminal, FileOutput, type LucideIcon } from 'lucide-react';
 import { BlockType, BLOCK_META } from '../types';
 import { useBlockStore } from '../store/blockStore';
 import VariablesPanel from './VariablesPanel';
@@ -12,13 +13,13 @@ const BLOCK_DESCRIPTIONS: Record<BlockType, string> = {
   file_write: 'write to a file',
 };
 
-const BLOCK_ICONS: Record<BlockType, string> = {
-  http_request: '🌐',
-  set_variable: '📦',
-  for_each: '🔄',
-  if_condition: '❓',
-  print: '🖨',
-  file_write: '💾',
+const BLOCK_ICONS: Record<BlockType, LucideIcon> = {
+  http_request: Globe,
+  set_variable: Package,
+  for_each: Repeat2,
+  if_condition: GitBranch,
+  print: Terminal,
+  file_write: FileOutput,
 };
 
 const BLOCK_TYPES: BlockType[] = [
@@ -77,7 +78,7 @@ export default function BlockPalette() {
                   className="w-full text-left rounded-lg overflow-hidden border border-gray-700 hover:border-gray-500 transition-colors group"
                 >
                   <div className={`${meta.color} px-2.5 py-1.5 flex items-center gap-2`}>
-                    <span className="text-sm">{BLOCK_ICONS[type]}</span>
+                    {(() => { const Icon = BLOCK_ICONS[type]; return <Icon size={14} className="text-white flex-shrink-0" />; })()}
                     <span className="text-white text-xs font-semibold">{meta.label}</span>
                   </div>
                   <div className="bg-gray-800 px-2.5 py-1">
