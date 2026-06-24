@@ -569,6 +569,89 @@ export function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?:
   );
 }
 
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
+function HttpRequestParams({ block }: { block: Block }) {
+  const updateBlock = useBlockStore((s) => s.updateBlock);
+  const set = (key: string, val: string) => updateBlock(block.id, { [key]: val });
+  const up  = (key: string) => (e: React.ChangeEvent<HTMLSelectElement>) =>
+    updateBlock(block.id, { [key]: e.target.value });
+
+  const p = block.params;
+  const advancedKeys = ['data', 'files', 'cookies', 'auth'] as const;
+  const hasAdvancedValue = advancedKeys.some((k) => p[k]?.trim());
+  const [showAdvanced, setShowAdvanced] = useState(hasAdvancedValue);
+
+  return (
+    <div className="space-y-1.5 mt-2">
+      <div className={ROW_CLS}>
+        <span className={LABEL_CLS}>Method</span>
+        <select value={p.method || 'GET'} onChange={up('method')} className={INPUT_CLS}>
+          {HTTP_METHODS.map((m) => <option key={m}>{m}</option>)}
+        </select>
+      </div>
+      <div className={ROW_CLS}>
+        <span className={LABEL_CLS}>URL</span>
+        <SmartField value={p.url || ''} onChange={(v) => set('url', v)}
+          types={['str', 'Any']} placeholder="api.example.com/v1/endpoint" />
+      </div>
+      <div className={ROW_CLS}>
+        <span className={LABEL_CLS}>Save as</span>
+        <OutputVarField value={p.varName || ''} onChange={(v) => set('varName', v)} suggestedType="Any" />
+      </div>
+      <div className={ROW_CLS}>
+        <span className={LABEL_CLS}>Params</span>
+        <SmartField value={p.params || ''} onChange={(v) => set('params', v)}
+          types={['dict', 'Any']} placeholder='{"page": 1}' />
+      </div>
+      <div className={ROW_CLS}>
+        <span className={LABEL_CLS}>Headers</span>
+        <SmartField value={p.headers || ''} onChange={(v) => set('headers', v)}
+          types={['dict', 'Any']} placeholder='{"Authorization": "Bearer ..."}' />
+      </div>
+      <div className={ROW_CLS}>
+        <span className={LABEL_CLS}>JSON body</span>
+        <SmartField value={p.json || ''} onChange={(v) => set('json', v)}
+          types={['dict', 'list', 'Any']} placeholder='{"key": "value"}' />
+      </div>
+
+      {/* Advanced toggle */}
+      <button
+        type="button"
+        onClick={() => setShowAdvanced((v) => !v)}
+        className="text-[11px] text-white/25 hover:text-white/50 transition-colors pt-0.5"
+      >
+        {showAdvanced ? '− Hide advanced' : '+ Advanced (data, files, cookies, auth)'}
+      </button>
+
+      {showAdvanced && (
+        <>
+          <div className={ROW_CLS}>
+            <span className={LABEL_CLS}>Raw data</span>
+            <SmartField value={p.data || ''} onChange={(v) => set('data', v)}
+              types={['str', 'Any']} placeholder="raw body string" />
+          </div>
+          <div className={ROW_CLS}>
+            <span className={LABEL_CLS}>Files</span>
+            <SmartField value={p.files || ''} onChange={(v) => set('files', v)}
+              types={['dict', 'Any']} placeholder='{"file": open("f.txt", "rb")}' />
+          </div>
+          <div className={ROW_CLS}>
+            <span className={LABEL_CLS}>Cookies</span>
+            <SmartField value={p.cookies || ''} onChange={(v) => set('cookies', v)}
+              types={['dict', 'Any']} placeholder='{"session": "abc123"}' />
+          </div>
+          <div className={ROW_CLS}>
+            <span className={LABEL_CLS}>Auth</span>
+            <SmartField value={p.auth || ''} onChange={(v) => set('auth', v)}
+              types={['Any']} placeholder='("username", "password")' />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function BlockParams({ block }: { block: Block }) {
   const updateBlock = useBlockStore((s) => s.updateBlock);
 
@@ -578,44 +661,7 @@ function BlockParams({ block }: { block: Block }) {
 
   switch (block.type) {
     case 'http_request':
-      return (
-        <div className="space-y-1.5 mt-2">
-          <div className={ROW_CLS}>
-            <span className={LABEL_CLS}>Method</span>
-            <select value={block.params.method || 'GET'} onChange={up('method')} className={INPUT_CLS}>
-              {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => <option key={m}>{m}</option>)}
-            </select>
-          </div>
-          <div className={ROW_CLS}>
-            <span className={LABEL_CLS}>URL</span>
-            <SmartField
-              value={block.params.url || ''}
-              onChange={(v) => set('url', v)}
-              types={['str', 'Any']}
-              placeholder="api.example.com/v1/endpoint"
-            />
-          </div>
-          <div className={ROW_CLS}>
-            <span className={LABEL_CLS}>Save as</span>
-            <OutputVarField
-              value={block.params.varName || ''}
-              onChange={(v) => set('varName', v)}
-              suggestedType="Any"
-            />
-          </div>
-          {['POST', 'PUT', 'PATCH'].includes(block.params.method || 'GET') && (
-            <div className={ROW_CLS}>
-              <span className={LABEL_CLS}>Body</span>
-              <SmartField
-                value={block.params.body || ''}
-                onChange={(v) => set('body', v)}
-                types={['dict', 'Any']}
-                placeholder='{"key": "value"}'
-              />
-            </div>
-          )}
-        </div>
-      );
+      return <HttpRequestParams block={block} />;
 
     case 'set_variable':
       return (

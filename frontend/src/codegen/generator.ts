@@ -36,13 +36,24 @@ function generateBlock(block: Block, indent: number, varNames: Set<string>): str
 
   switch (block.type as BlockType) {
     case 'http_request': {
-      const { method = 'GET', url = '', varName = 'response', body = '' } = block.params;
-      const m = method.toLowerCase();
-      const urlExpr  = resolveField(url,  varNames, true,  'https://api.example.com');
-      const bodyExpr = resolveField(body, varNames, false, '{}');
-      const bodyArg  = body.trim() && ['post', 'put', 'patch'].includes(m)
-        ? `, json=${bodyExpr}` : '';
-      return `${pad}${varName.trim() || 'response'} = requests.${m}(${urlExpr}${bodyArg})`;
+      const {
+        method = 'GET', url = '', varName = 'response',
+        params = '', headers = '', json = '', data = '', files = '', cookies = '', auth = '',
+      } = block.params;
+      const urlExpr = resolveField(url, varNames, true, 'https://api.example.com');
+      const args: string[] = [`method="${method}"`, `url=${urlExpr}`];
+      const expr = (v: string, fb: string) => resolveField(v, varNames, false, fb);
+      if (params.trim())  args.push(`params=${expr(params, '{}')}`);
+      if (headers.trim()) args.push(`headers=${expr(headers, '{}')}`);
+      if (json.trim())    args.push(`json=${expr(json, '{}')}`);
+      if (data.trim())    args.push(`data=${expr(data, '""')}`);
+      if (files.trim())   args.push(`files=${expr(files, 'None')}`);
+      if (cookies.trim()) args.push(`cookies=${expr(cookies, '{}')}`);
+      if (auth.trim())    args.push(`auth=${expr(auth, 'None')}`);
+      const call = args.length > 2
+        ? `requests.request(\n${pad}    ${args.join(`,\n${pad}    `)},\n${pad})`
+        : `requests.request(${args.join(', ')})`;
+      return `${pad}${varName.trim() || 'response'} = ${call}`;
     }
 
     case 'set_variable': {

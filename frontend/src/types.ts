@@ -143,7 +143,7 @@ export const BLOCK_META: Record<
 };
 
 export const BLOCK_DEFAULTS: Record<BlockType, Record<string, string>> = {
-  http_request: { method: 'GET', url: '', varName: 'response', body: '' },
+  http_request: { method: 'GET', url: '', varName: 'response', params: '', headers: '', json: '', data: '', files: '', cookies: '', auth: '' },
   set_variable: { name: '', value: '' },
   for_each: { itemVar: 'item', iterable: '' },
   if_condition: { condition: '' },
