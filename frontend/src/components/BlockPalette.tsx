@@ -44,50 +44,61 @@ export default function BlockPalette() {
   const variableCount = useBlockStore((s) => s.variables.length);
 
   return (
-    <aside className="w-full h-full bg-gray-900 flex flex-col overflow-hidden">
-      <div className="flex flex-shrink-0 border-b border-gray-700">
-        {(['variables', 'blocks'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 py-2 text-xs font-medium capitalize transition-colors ${
-              tab === t
-                ? 'text-white bg-gray-800 border-b-2 border-blue-500'
-                : 'text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            {TAB_LABELS[t]}
-            {t === 'variables' && variableCount > 0 && (
-              <span className="ml-1.5 text-xs bg-gray-700 text-gray-400 rounded-full px-1.5 py-0.5">
-                {variableCount}
-              </span>
-            )}
-          </button>
-        ))}
+    <aside className="w-full h-full bg-gray-950 flex flex-col overflow-hidden">
+      {/* iOS 26-style segment control */}
+      <div className="flex-shrink-0 px-3 pt-3 pb-2">
+        <div
+          className="flex p-1 rounded-xl"
+          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          {(['variables', 'blocks'] as Tab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-200 ${
+                tab === t ? 'text-white' : 'text-white/40 hover:text-white/60'
+              }`}
+              style={tab === t ? {
+                background: 'rgba(255,255,255,0.15)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.15)',
+              } : undefined}
+            >
+              {TAB_LABELS[t]}
+              {t === 'variables' && variableCount > 0 && (
+                <span className={`text-[10px] rounded-full px-1.5 py-0.5 leading-none ${
+                  tab === t ? 'bg-white/20 text-white' : 'bg-white/10 text-white/40'
+                }`}>
+                  {variableCount}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === 'variables' ? (
         <VariablesPanel />
       ) : (
         <>
-          <div className="px-3 py-2 border-b border-gray-700 flex-shrink-0">
-            <p className="text-xs text-gray-600">Click a scale to add it to your script</p>
+          <div className="px-3 pb-2 flex-shrink-0">
+            <p className="text-xs text-white/25">Click a scale to add it to your script</p>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+          <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2">
             {BLOCK_TYPES.map((type) => {
               const meta = BLOCK_META[type];
               return (
                 <button
                   key={type}
                   onClick={() => addBlock(type)}
-                  className="w-full text-left rounded-lg overflow-hidden border border-gray-700 hover:border-gray-500 transition-colors group"
+                  className="w-full text-left rounded-2xl overflow-hidden transition-all duration-150"
+                  style={{ border: '1px solid rgba(255,255,255,0.08)' }}
                 >
-                  <div className={`${meta.color} px-2.5 py-1.5 flex items-center gap-2`}>
+                  <div className={`${meta.color} px-3 py-2 flex items-center gap-2`}>
                     {(() => { const Icon = BLOCK_ICONS[type]; return <Icon size={14} className="text-white flex-shrink-0" />; })()}
                     <span className="text-white text-xs font-semibold">{meta.label}</span>
                   </div>
-                  <div className="bg-gray-800 px-2.5 py-1">
-                    <p className="text-gray-500 text-xs">{BLOCK_DESCRIPTIONS[type]}</p>
+                  <div style={{ background: 'rgba(255,255,255,0.04)' }} className="px-3 py-1.5">
+                    <p className="text-white/35 text-xs">{BLOCK_DESCRIPTIONS[type]}</p>
                   </div>
                 </button>
               );

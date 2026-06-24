@@ -50,13 +50,13 @@ const TYPE_BADGE: Record<PythonType, string> = {
 };
 
 const INPUT_CLS =
-  'w-full bg-gray-700 border border-gray-600 rounded-md px-2.5 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed';
+  'w-full bg-white/[0.08] border border-white/10 rounded-xl px-2.5 py-1.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-blue-400/70 disabled:opacity-30 disabled:cursor-not-allowed';
 
 const SELECT_CLS =
-  'w-full bg-gray-700 border border-gray-600 rounded-md px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-blue-400 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed';
+  'w-full bg-white/[0.08] border border-white/10 rounded-xl px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-blue-400/70 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed';
 
 const ADD_ITEM_CLS =
-  'w-full text-xs text-gray-500 hover:text-gray-200 border border-dashed border-gray-600 hover:border-gray-500 rounded-md py-1.5 transition-colors mt-1 disabled:opacity-30 disabled:cursor-not-allowed';
+  'w-full text-xs text-white/30 hover:text-white/70 border border-dashed border-white/15 hover:border-white/30 rounded-xl py-1.5 transition-colors mt-1 disabled:opacity-30 disabled:cursor-not-allowed';
 
 function ValueEditor({ variable: v, locked }: { variable: Variable; locked: boolean }) {
   const updateVariable  = useBlockStore((s) => s.updateVariable);
@@ -92,22 +92,22 @@ function ValueEditor({ variable: v, locked }: { variable: Variable; locked: bool
     case 'list':
       return (
         <div className="space-y-1.5">
-          {v.items.length === 0 && <p className="text-xs text-gray-600 italic">No items yet</p>}
+          {v.items.length === 0 && <p className="text-xs text-white/25 italic">No items yet</p>}
           {v.items.map((item: ListItem, idx: number) => (
             <div key={idx} className="group/row flex items-center gap-1.5">
               {!locked && (
                 <div className="flex flex-col gap-px flex-shrink-0 opacity-0 group-hover/row:opacity-100 transition-opacity">
                   <button onClick={() => moveListItem(v.id, idx, 'up')} disabled={idx === 0}
-                    className="text-gray-600 hover:text-gray-300 disabled:opacity-20 w-4 h-4 flex items-center justify-center rounded"><ArrowUp size={10} /></button>
+                    className="text-white/25 hover:text-white/70 disabled:opacity-20 w-4 h-4 flex items-center justify-center rounded"><ArrowUp size={10} /></button>
                   <button onClick={() => moveListItem(v.id, idx, 'down')} disabled={idx === v.items.length - 1}
-                    className="text-gray-600 hover:text-gray-300 disabled:opacity-20 w-4 h-4 flex items-center justify-center rounded"><ArrowDown size={10} /></button>
+                    className="text-white/25 hover:text-white/70 disabled:opacity-20 w-4 h-4 flex items-center justify-center rounded"><ArrowDown size={10} /></button>
                 </div>
               )}
               <select
                 disabled={locked}
                 value={item.type}
                 onChange={(e) => updateListItem(v.id, idx, { type: e.target.value as ListItem['type'] })}
-                className="bg-gray-600 border border-gray-500 rounded text-xs text-white px-1 py-1.5 focus:outline-none focus:border-blue-400 flex-shrink-0 w-14 disabled:opacity-40"
+                className="bg-white/10 border border-white/15 rounded-lg text-xs text-white px-1 py-1.5 focus:outline-none focus:border-blue-400/70 flex-shrink-0 w-14 disabled:opacity-40"
               >
                 {PRIMITIVE_TYPES.map((t) => (
                   <option key={t} value={t}>{PRIMITIVE_SHORT[t]}</option>
@@ -133,7 +133,7 @@ function ValueEditor({ variable: v, locked }: { variable: Variable; locked: bool
               )}
               {!locked && (
                 <button onClick={() => removeListItem(v.id, idx)}
-                  className="text-gray-600 hover:text-red-400 w-6 h-6 flex items-center justify-center rounded hover:bg-gray-700 flex-shrink-0 transition-colors opacity-0 group-hover/row:opacity-100"
+                  className="text-white/25 hover:text-red-400 w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 flex-shrink-0 transition-colors opacity-0 group-hover/row:opacity-100"
                 ><X size={12} /></button>
               )}
             </div>
@@ -145,9 +145,9 @@ function ValueEditor({ variable: v, locked }: { variable: Variable; locked: bool
     case 'dict':
       return (
         <div className="space-y-2">
-          {v.entries.length === 0 && <p className="text-xs text-gray-600 italic">No entries yet</p>}
+          {v.entries.length === 0 && <p className="text-xs text-white/25 italic">No entries yet</p>}
           {v.entries.map((entry: DictEntry, idx: number) => (
-            <div key={idx} className="group/row bg-gray-700/40 border border-gray-600/60 rounded-md p-2 space-y-1.5">
+            <div key={idx} className="group/row bg-white/[0.04] border border-white/[0.08] rounded-xl p-2 space-y-1.5">
               {/* Key row + controls */}
               <div className="flex items-center gap-1.5">
                 <input
@@ -160,11 +160,11 @@ function ValueEditor({ variable: v, locked }: { variable: Variable; locked: bool
                 {!locked && (
                   <div className="flex gap-px opacity-0 group-hover/row:opacity-100 transition-opacity flex-shrink-0">
                     <button onClick={() => moveDictEntry(v.id, idx, 'up')} disabled={idx === 0}
-                      className="text-gray-600 hover:text-gray-300 disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded"><ArrowUp size={12} /></button>
+                      className="text-white/25 hover:text-white/70 disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded"><ArrowUp size={12} /></button>
                     <button onClick={() => moveDictEntry(v.id, idx, 'down')} disabled={idx === v.entries.length - 1}
-                      className="text-gray-600 hover:text-gray-300 disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded"><ArrowDown size={12} /></button>
+                      className="text-white/25 hover:text-white/70 disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded"><ArrowDown size={12} /></button>
                     <button onClick={() => removeDictEntry(v.id, idx)}
-                      className="text-gray-600 hover:text-red-400 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-700 transition-colors"><X size={12} /></button>
+                      className="text-white/25 hover:text-red-400 w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 transition-colors"><X size={12} /></button>
                   </div>
                 )}
               </div>
@@ -174,7 +174,7 @@ function ValueEditor({ variable: v, locked }: { variable: Variable; locked: bool
                   disabled={locked}
                   value={entry.valueType}
                   onChange={(e) => updateDictEntry(v.id, idx, { valueType: e.target.value as DictEntry['valueType'] })}
-                  className="bg-gray-600 border border-gray-500 rounded text-xs text-white px-1 py-1.5 focus:outline-none focus:border-blue-400 flex-shrink-0 w-14 disabled:opacity-40"
+                  className="bg-white/10 border border-white/15 rounded-lg text-xs text-white px-1 py-1.5 focus:outline-none focus:border-blue-400/70 flex-shrink-0 w-14 disabled:opacity-40"
                 >
                   {PRIMITIVE_TYPES.map((t) => (
                     <option key={t} value={t}>{PRIMITIVE_SHORT[t]}</option>
@@ -206,13 +206,13 @@ function ValueEditor({ variable: v, locked }: { variable: Variable; locked: bool
       );
 
     case 'None':
-      return <div className="px-2.5 py-1.5 text-sm text-gray-500 bg-gray-900/40 border border-gray-700 rounded-md select-none">None</div>;
+      return <div className="px-2.5 py-1.5 text-sm text-white/30 bg-white/[0.04] border border-white/[0.08] rounded-xl select-none">None</div>;
 
     case 'Any':
       return (
         <div>
           <input disabled={locked} value={v.value} onChange={(e) => upVal(e.target.value)} placeholder="e.g. os.environ.get('KEY')" className={`${INPUT_CLS} font-mono`} spellCheck={false} />
-          {!locked && <p className="text-xs text-gray-600 mt-1">Enter a Python expression directly</p>}
+          {!locked && <p className="text-xs text-white/25 mt-1">Enter a Python expression directly</p>}
         </div>
       );
 
@@ -243,7 +243,7 @@ export default function VariablesPanel() {
   }, [pendingDeleteId]);
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // prevent document listener from immediately cancelling
+    e.stopPropagation();
     if (pendingDeleteId === id) {
       removeVariable(id);
       setPendingDeleteId(null);
@@ -273,9 +273,9 @@ export default function VariablesPanel() {
     setExpandedIds((prev) => {
       const next = new Set(prev);
       if (!currentlyLocked) {
-        next.delete(id); // locking → collapse
+        next.delete(id);
       } else {
-        next.add(id);    // unlocking → expand
+        next.add(id);
       }
       return next;
     });
@@ -295,12 +295,12 @@ export default function VariablesPanel() {
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Sort control */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-700/60 flex-shrink-0">
-        <span className="text-xs text-gray-500 flex-shrink-0">Sort</span>
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] flex-shrink-0">
+        <span className="text-xs text-white/30 flex-shrink-0">Sort</span>
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortMode)}
-          className="flex-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-300 px-2 py-1 focus:outline-none focus:border-blue-400 cursor-pointer"
+          className="flex-1 bg-white/[0.06] border border-white/[0.08] rounded-lg text-xs text-white/60 px-2 py-1 focus:outline-none focus:border-blue-400/70 cursor-pointer"
         >
           <option value="custom">Custom order</option>
           <option value="name-asc">Name A → Z</option>
@@ -313,9 +313,14 @@ export default function VariablesPanel() {
       <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
         {variables.length === 0 && (
           <div className="text-center py-12 px-4">
-            <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center mx-auto mb-3"><Package size={20} className="text-gray-500" /></div>
-            <p className="text-gray-400 text-sm font-medium mb-1">No variables yet</p>
-            <p className="text-gray-600 text-xs leading-relaxed">Set your values here — they appear at the top of your generated script</p>
+            <div
+              className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/[0.08]"
+              style={{ background: 'rgba(255,255,255,0.05)' }}
+            >
+              <Package size={22} className="text-white/25" />
+            </div>
+            <p className="text-white/50 text-sm font-semibold mb-1">No variables yet</p>
+            <p className="text-white/25 text-xs leading-relaxed">Set your values here — they appear at the top of your generated script</p>
           </div>
         )}
 
@@ -324,11 +329,10 @@ export default function VariablesPanel() {
           return (
             <div
               key={v.id}
-              className={`group/card border rounded-lg overflow-hidden transition-colors ${
-                v.locked
-                  ? 'bg-gray-800/60 border-gray-700/50'
-                  : 'bg-gray-800 border-gray-700'
+              className={`group/card border rounded-2xl overflow-hidden transition-all ${
+                v.locked ? 'border-white/[0.05]' : 'border-white/[0.09]'
               }`}
+              style={{ background: v.locked ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)' }}
             >
               {/* Header — always visible */}
               <div className="flex items-center gap-1 px-2.5 py-2">
@@ -341,14 +345,14 @@ export default function VariablesPanel() {
                   {v.locked && (
                     <Lock size={11} className="text-amber-500/70 flex-shrink-0" />
                   )}
-                  <span className={`flex-1 min-w-0 text-sm font-mono truncate ${v.locked ? 'text-gray-400' : 'text-white'}`}>
-                    {v.name || <span className="text-gray-600">Unnamed</span>}
+                  <span className={`flex-1 min-w-0 text-sm font-mono truncate ${v.locked ? 'text-white/40' : 'text-white'}`}>
+                    {v.name || <span className="text-white/20">Unnamed</span>}
                   </span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${TYPE_BADGE[v.type]}`}>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${TYPE_BADGE[v.type]}`}>
                     {TYPE_LABELS[v.type]}
                   </span>
                   {v.constant && (
-                    <span className="text-xs px-1.5 py-0.5 rounded font-bold flex-shrink-0 bg-yellow-600/80 text-yellow-100 tracking-wide">
+                    <span className="text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 bg-yellow-600/80 text-yellow-100 tracking-wide">
                       CONST
                     </span>
                   )}
@@ -360,13 +364,13 @@ export default function VariablesPanel() {
                     <button
                       onClick={() => moveVariable(v.id, 'up')}
                       disabled={idx === 0}
-                      className="text-gray-400 hover:text-white disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-600 transition-colors flex-shrink-0"
+                      className="text-white/40 hover:text-white disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded hover:bg-white/15 transition-colors flex-shrink-0"
                       title="Move up"
                     ><ArrowUp size={12} /></button>
                     <button
                       onClick={() => moveVariable(v.id, 'down')}
                       disabled={idx === sortedVariables.length - 1}
-                      className="text-gray-400 hover:text-white disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-600 transition-colors flex-shrink-0"
+                      className="text-white/40 hover:text-white disabled:opacity-20 w-5 h-5 flex items-center justify-center rounded hover:bg-white/15 transition-colors flex-shrink-0"
                       title="Move down"
                     ><ArrowDown size={12} /></button>
                   </>
@@ -375,14 +379,14 @@ export default function VariablesPanel() {
                   pendingDeleteId === v.id ? (
                     <button
                       onMouseDown={(e) => handleDelete(e, v.id)}
-                      className="flex-shrink-0 text-xs text-white bg-red-600 hover:bg-red-500 px-2 py-0.5 rounded font-medium transition-colors"
+                      className="flex-shrink-0 text-xs text-white bg-red-600 hover:bg-red-500 px-2 py-0.5 rounded-lg font-medium transition-colors"
                     >
                       Delete?
                     </button>
                   ) : (
                     <button
                       onMouseDown={(e) => handleDelete(e, v.id)}
-                      className="text-gray-600 hover:text-red-400 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-700 transition-colors flex-shrink-0"
+                      className="text-white/25 hover:text-red-400 w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 transition-colors flex-shrink-0"
                     ><X size={12} /></button>
                   )
                 )}
@@ -390,10 +394,10 @@ export default function VariablesPanel() {
                 {/* Lock / Edit button */}
                 <button
                   onClick={() => handleToggleLock(v.id, v.locked)}
-                  className={`flex-shrink-0 text-xs px-2 py-0.5 rounded font-medium transition-colors ${
+                  className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-lg font-medium transition-colors ${
                     v.locked
                       ? 'text-amber-400 hover:text-amber-300 hover:bg-amber-400/10 border border-amber-700/40'
-                      : 'text-gray-500 hover:text-gray-200 hover:bg-gray-700'
+                      : 'text-white/30 hover:text-white/80 hover:bg-white/10'
                   }`}
                   title={v.locked ? 'Unlock to edit' : 'Lock variable'}
                 >
@@ -402,7 +406,7 @@ export default function VariablesPanel() {
 
                 <button
                   onClick={() => toggle(v.id)}
-                  className="text-gray-600 hover:text-gray-300 w-5 h-5 flex items-center justify-center text-xs flex-shrink-0 transition-colors"
+                  className="text-white/30 hover:text-white/70 w-5 h-5 flex items-center justify-center flex-shrink-0 transition-colors"
                 >
                   {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
@@ -411,16 +415,16 @@ export default function VariablesPanel() {
               {/* Hover value preview — only when collapsed */}
               {!isExpanded && (
                 <div className="hidden group-hover/card:flex items-center gap-1.5 px-3 pb-2 -mt-1">
-                  <span className="text-gray-600 text-xs">=</span>
-                  <code className="text-xs text-gray-400 font-mono truncate">{formatPreview(v)}</code>
+                  <span className="text-white/25 text-xs">=</span>
+                  <code className="text-xs text-white/50 font-mono truncate">{formatPreview(v)}</code>
                 </div>
               )}
 
               {/* Expanded editor */}
               {isExpanded && (
-                <div className="border-t border-gray-700/60 px-3 pb-3 pt-2.5 space-y-2.5">
+                <div className="border-t border-white/[0.06] px-3 pb-3 pt-2.5 space-y-2.5">
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Name</label>
+                    <label className="text-xs text-white/35 mb-1 block font-medium">Name</label>
                     <input
                       disabled={v.locked}
                       value={v.name}
@@ -431,7 +435,7 @@ export default function VariablesPanel() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Type</label>
+                    <label className="text-xs text-white/35 mb-1 block font-medium">Type</label>
                     <select
                       disabled={v.locked}
                       value={v.type}
@@ -453,18 +457,18 @@ export default function VariablesPanel() {
                         onChange={() => updateVariable(v.id, { constant: !v.constant })}
                         className="sr-only"
                       />
-                      <div className={`w-8 h-4 rounded-full transition-colors ${v.constant ? 'bg-yellow-500' : 'bg-gray-600'}`} />
+                      <div className={`w-8 h-4 rounded-full transition-colors ${v.constant ? 'bg-yellow-500' : 'bg-white/20'}`} />
                       <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${v.constant ? 'translate-x-4' : 'translate-x-0'}`} />
                     </div>
                     <div>
-                      <p className="text-xs text-gray-300 font-medium leading-none mb-0.5">Constant</p>
-                      <p className="text-xs text-gray-600 leading-snug">
-                        Value cannot change at runtime. Uses <code className="text-gray-500">Final</code> annotation.
+                      <p className="text-xs text-white/70 font-medium leading-none mb-0.5">Constant</p>
+                      <p className="text-xs text-white/30 leading-snug">
+                        Value cannot change at runtime. Uses <code className="text-white/40">Final</code> annotation.
                       </p>
                     </div>
                   </label>
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">
+                    <label className="text-xs text-white/35 mb-1 block font-medium">
                       {v.type === 'list' ? 'Items' : v.type === 'dict' ? 'Entries' : 'Value'}
                     </label>
                     <ValueEditor variable={v} locked={v.locked} />
@@ -473,7 +477,7 @@ export default function VariablesPanel() {
                   {v.locked && (
                     <button
                       onClick={() => handleToggleLock(v.id, true)}
-                      className="w-full text-xs text-amber-400 hover:text-amber-300 border border-amber-700/40 hover:border-amber-600/60 rounded-md py-1.5 transition-colors"
+                      className="w-full text-xs text-amber-400 hover:text-amber-300 border border-amber-700/40 hover:border-amber-600/60 rounded-xl py-1.5 transition-colors"
                     >
                       Unlock to edit
                     </button>
@@ -485,10 +489,11 @@ export default function VariablesPanel() {
         })}
       </div>
 
-      <div className="p-2 border-t border-gray-700 flex-shrink-0">
+      <div className="p-2 border-t border-white/[0.06] flex-shrink-0">
         <button
           onClick={addVariable}
-          className="w-full text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-dashed border-gray-600 hover:border-gray-500 rounded-lg py-2 transition-colors"
+          className="w-full text-sm text-white/35 hover:text-white/70 border border-dashed border-white/15 hover:border-white/30 rounded-2xl py-2 transition-colors"
+          style={{ background: 'rgba(255,255,255,0.03)' }}
         >
           + Add Variable
         </button>

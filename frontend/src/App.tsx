@@ -88,7 +88,7 @@ export default function App() {
   /* ── Mobile layout ── */
   if (isMobile) {
     return (
-      <div className="h-dvh flex flex-col bg-black text-white overflow-hidden select-none">
+      <div className="h-dvh flex flex-col bg-gray-950 text-white overflow-hidden select-none">
 
         {/* Glass header */}
         <header

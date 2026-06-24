@@ -21,12 +21,15 @@ function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolea
       {!open ? (
         <button
           onClick={() => setOpen(true)}
-          className="w-full text-xs text-gray-600 hover:text-gray-400 border border-dashed border-gray-700 hover:border-gray-500 rounded px-2 py-1 transition-colors text-left"
+          className="w-full text-xs text-white/25 hover:text-white/60 border border-dashed border-white/15 hover:border-white/30 rounded-xl px-2 py-1 transition-colors text-left"
         >
           + Add scale{inElse ? ' (else)' : ''}
         </button>
       ) : (
-        <div className="border border-gray-600 rounded bg-gray-900 p-2">
+        <div
+          className="rounded-2xl p-2 backdrop-blur-sm"
+          style={{ border: '1px solid rgba(255,255,255,0.10)', background: 'rgba(3,7,18,0.85)' }}
+        >
           <div className="flex flex-wrap gap-1 mb-2">
             {BLOCK_TYPES.map((type) => {
               const meta = BLOCK_META[type];
@@ -37,7 +40,7 @@ function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolea
                     addBlock(type, parentId, inElse);
                     setOpen(false);
                   }}
-                  className={`${meta.color} text-white text-xs px-2 py-0.5 rounded hover:opacity-80 transition-opacity`}
+                  className={`${meta.color} text-white text-xs px-2 py-0.5 rounded-lg hover:opacity-80 transition-opacity`}
                 >
                   {meta.label}
                 </button>
@@ -46,7 +49,7 @@ function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolea
           </div>
           <button
             onClick={() => setOpen(false)}
-            className="text-xs text-gray-500 hover:text-gray-300"
+            className="text-xs text-white/30 hover:text-white/60 transition-colors"
           >
             Cancel
           </button>
@@ -57,8 +60,8 @@ function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolea
 }
 
 const INPUT_CLS =
-  'bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-400 w-full font-mono';
-const LABEL_CLS = 'text-gray-400 text-xs w-20 flex-shrink-0';
+  'bg-white/[0.08] border border-white/10 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-400/70 w-full font-mono placeholder-white/25';
+const LABEL_CLS = 'text-white/40 text-xs w-20 flex-shrink-0';
 const ROW_CLS = 'flex items-center gap-2';
 
 function BlockParams({ block }: { block: Block }) {
@@ -119,7 +122,7 @@ function BlockParams({ block }: { block: Block }) {
             className={`${INPUT_CLS} w-28`}
             placeholder='variable_name'
           />
-          <span className="text-gray-400 text-xs font-mono">=</span>
+          <span className="text-white/35 text-xs font-mono">=</span>
           <input
             value={block.params.value || ''}
             onChange={up('value')}
@@ -132,14 +135,14 @@ function BlockParams({ block }: { block: Block }) {
     case 'for_each':
       return (
         <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-          <span className="text-gray-400 text-xs font-mono">for</span>
+          <span className="text-white/35 text-xs font-mono">for</span>
           <input
             value={block.params.itemVar || ''}
             onChange={up('itemVar')}
             className={`${INPUT_CLS} w-24`}
             placeholder='item'
           />
-          <span className="text-gray-400 text-xs font-mono">in</span>
+          <span className="text-white/35 text-xs font-mono">in</span>
           <input
             value={block.params.iterable || ''}
             onChange={up('iterable')}
@@ -152,28 +155,28 @@ function BlockParams({ block }: { block: Block }) {
     case 'if_condition':
       return (
         <div className="flex items-center gap-1.5 mt-2">
-          <span className="text-gray-400 text-xs font-mono">if</span>
+          <span className="text-white/35 text-xs font-mono">if</span>
           <input
             value={block.params.condition || ''}
             onChange={up('condition')}
             className={`${INPUT_CLS} flex-1`}
             placeholder='condition or expression'
           />
-          <span className="text-gray-400 text-xs font-mono">:</span>
+          <span className="text-white/35 text-xs font-mono">:</span>
         </div>
       );
 
     case 'print':
       return (
         <div className="flex items-center gap-1.5 mt-2">
-          <span className="text-gray-400 text-xs font-mono">print(</span>
+          <span className="text-white/35 text-xs font-mono">print(</span>
           <input
             value={block.params.expression || ''}
             onChange={up('expression')}
             className={`${INPUT_CLS} flex-1`}
             placeholder='"Hello!" or variable'
           />
-          <span className="text-gray-400 text-xs font-mono">)</span>
+          <span className="text-white/35 text-xs font-mono">)</span>
         </div>
       );
 
@@ -213,7 +216,7 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
 
   return (
     <div className={`my-1 ${depth > 0 ? '' : ''}`}>
-      <div className={`rounded-lg border ${meta.borderColor} bg-gray-800 overflow-hidden`}>
+      <div className={`rounded-2xl border ${meta.borderColor} overflow-hidden`} style={{ background: 'rgba(255,255,255,0.04)' }}>
         <div className={`${meta.color} px-3 py-1.5 flex items-center justify-between`}>
           <span className="text-white font-semibold text-xs uppercase tracking-wider">
             {meta.label}
@@ -247,8 +250,8 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
           <BlockParams block={block} />
 
           {meta.isContainer && (
-            <div className="mt-3 pl-3 border-l border-gray-600">
-              <p className="text-xs text-gray-600 mb-1 font-mono">do:</p>
+            <div className="mt-3 pl-3 border-l border-white/15">
+              <p className="text-xs text-white/30 mb-1 font-mono">do:</p>
               {block.children.map((child) => (
                 <BlockNode key={child.id} block={child} depth={depth + 1} />
               ))}
@@ -257,8 +260,8 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
           )}
 
           {block.type === 'if_condition' && (
-            <div className="mt-3 pl-3 border-l border-gray-600">
-              <p className="text-xs text-gray-600 mb-1 font-mono">else: (optional)</p>
+            <div className="mt-3 pl-3 border-l border-white/15">
+              <p className="text-xs text-white/30 mb-1 font-mono">else: (optional)</p>
               {block.elseChildren.map((child) => (
                 <BlockNode key={child.id} block={child} depth={depth + 1} />
               ))}
