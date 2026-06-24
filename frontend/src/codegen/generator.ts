@@ -11,39 +11,66 @@ function collectImports(blocks: Block[]): Set<string> {
   return imports;
 }
 
+function escapeStr(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+// Resolve a block param field.
+// - mode 'var' (or default 'var'): value is a variable name, used as-is
+// - mode 'literal' (or default 'literal'): value is a user-typed literal
+//   - autoQuote true: wrap as Python string "value"
+//   - autoQuote false: use as-is (Python expression)
+function resolveField(
+  value: string,
+  mode: string | undefined,
+  defaultMode: 'var' | 'literal',
+  autoQuote: boolean,
+  emptyFallback: string,
+): string {
+  const isVar = (mode || defaultMode) === 'var';
+  if (isVar) return value.trim() || emptyFallback;
+  if (!value.trim()) return autoQuote ? `"${emptyFallback}"` : emptyFallback;
+  return autoQuote ? `"${escapeStr(value.trim())}"` : value.trim();
+}
+
 function generateBlock(block: Block, indent: number): string {
   const pad = '    '.repeat(indent);
   const pad1 = '    '.repeat(indent + 1);
 
   switch (block.type as BlockType) {
     case 'http_request': {
-      const { method = 'GET', url = '"https://example.com"', varName = 'response', body } = block.params;
+      const { method = 'GET', url = '', url_mode, varName = 'response', body = '', body_mode } = block.params;
       const m = method.toLowerCase();
-      const bodyArg = body && ['post', 'put', 'patch'].includes(m) ? `, json=${body}` : '';
-      return `${pad}${varName} = requests.${m}(${url}${bodyArg})`;
+      const urlExpr = resolveField(url, url_mode, 'literal', true, 'https://api.example.com');
+      const bodyExpr = resolveField(body, body_mode, 'var', false, '{}');
+      const bodyArg = body.trim() && ['post', 'put', 'patch'].includes(m) ? `, json=${bodyExpr}` : '';
+      return `${pad}${varName.trim() || 'response'} = requests.${m}(${urlExpr}${bodyArg})`;
     }
 
     case 'set_variable': {
-      const { name = 'variable', value = 'None' } = block.params;
-      return `${pad}${name} = ${value}`;
+      const { name = 'variable', value = '', value_mode } = block.params;
+      const valueExpr = resolveField(value, value_mode, 'var', false, 'None');
+      return `${pad}${name.trim() || 'variable'} = ${valueExpr}`;
     }
 
     case 'for_each': {
-      const { itemVar = 'item', iterable = '[]' } = block.params;
+      const { itemVar = 'item', iterable = '', iterable_mode } = block.params;
+      const iterExpr = resolveField(iterable, iterable_mode, 'var', false, '[]');
       const body =
         block.children.length > 0
           ? block.children.map((c) => generateBlock(c, indent + 1)).join('\n')
           : `${pad1}pass`;
-      return `${pad}for ${itemVar} in ${iterable}:\n${body}`;
+      return `${pad}for ${itemVar.trim() || 'item'} in ${iterExpr}:\n${body}`;
     }
 
     case 'if_condition': {
-      const { condition = 'True' } = block.params;
+      const { condition = '', condition_mode } = block.params;
+      const condExpr = resolveField(condition, condition_mode, 'var', false, 'True');
       const body =
         block.children.length > 0
           ? block.children.map((c) => generateBlock(c, indent + 1)).join('\n')
           : `${pad1}pass`;
-      let code = `${pad}if ${condition}:\n${body}`;
+      let code = `${pad}if ${condExpr}:\n${body}`;
       if (block.elseChildren.length > 0) {
         const elseBody = block.elseChildren.map((c) => generateBlock(c, indent + 1)).join('\n');
         code += `\n${pad}else:\n${elseBody}`;
@@ -52,22 +79,21 @@ function generateBlock(block: Block, indent: number): string {
     }
 
     case 'print': {
-      const { expression = '""' } = block.params;
-      return `${pad}print(${expression})`;
+      const { expression = '', expression_mode } = block.params;
+      const exprCode = resolveField(expression, expression_mode, 'var', true, '');
+      return `${pad}print(${exprCode || '""'})`;
     }
 
     case 'file_write': {
-      const { path = '"output.txt"', content = '""' } = block.params;
-      return `${pad}with open(${path}, 'w') as f:\n${pad1}f.write(str(${content}))`;
+      const { path = '', path_mode, content = '', content_mode } = block.params;
+      const pathExpr = resolveField(path, path_mode, 'literal', true, 'output.txt');
+      const contentExpr = resolveField(content, content_mode, 'var', true, '');
+      return `${pad}with open(${pathExpr}, 'w') as f:\n${pad1}f.write(str(${contentExpr || '""'}))`;
     }
 
     default:
       return `${pad}pass`;
   }
-}
-
-function escapeStr(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 function formatPrimitive(type: PrimitiveType, value: string): string {

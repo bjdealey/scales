@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { v4 as uuid } from 'uuid';
-import { Block, BlockType, BLOCK_DEFAULTS, Variable, TYPE_DEFAULTS, DictEntry, ListItem, PRIMITIVE_DEFAULTS, SortMode } from '../types';
+import { Block, BlockType, BLOCK_DEFAULTS, Variable, PythonType, TYPE_DEFAULTS, DictEntry, ListItem, PRIMITIVE_DEFAULTS, SortMode } from '../types';
 
 interface BlockStore {
   blocks: Block[];
@@ -14,6 +14,7 @@ interface BlockStore {
   moveBlock: (id: string, direction: 'up' | 'down') => void;
   clearAll: () => void;
   addVariable: () => void;
+  addVariableWithName: (name: string, type: PythonType) => void;
   removeVariable: (id: string) => void;
   updateVariable: (id: string, patch: Partial<Omit<Variable, 'id'>>) => void;
   moveVariable: (id: string, direction: 'up' | 'down') => void;
@@ -155,6 +156,21 @@ export const useBlockStore = create<BlockStore>()(
           name: '',
           type: 'str',
           value: '',
+          items: [],
+          entries: [],
+          locked: false,
+          constant: false,
+        });
+      });
+    },
+
+    addVariableWithName: (name: string, type: PythonType) => {
+      set((state) => {
+        state.variables.push({
+          id: uuid(),
+          name,
+          type,
+          value: TYPE_DEFAULTS[type],
           items: [],
           entries: [],
           locked: false,

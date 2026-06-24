@@ -143,10 +143,10 @@ export const BLOCK_META: Record<
 };
 
 export const BLOCK_DEFAULTS: Record<BlockType, Record<string, string>> = {
-  http_request: { method: 'GET', url: '"https://api.example.com"', varName: 'response', body: '' },
-  set_variable: { name: 'my_var', value: '"hello"' },
-  for_each: { itemVar: 'item', iterable: 'response.json()' },
-  if_condition: { condition: 'True' },
-  print: { expression: '"Hello, world!"' },
-  file_write: { path: '"output.txt"', content: '"data"' },
+  http_request: { method: 'GET', url: '', varName: 'response', body: '' },
+  set_variable: { name: '', value: '' },
+  for_each: { itemVar: 'item', iterable: '' },
+  if_condition: { condition: '' },
+  print: { expression: '' },
+  file_write: { path: '', content: '' },
 };
