@@ -88,37 +88,64 @@ export default function App() {
   /* ── Mobile layout ── */
   if (isMobile) {
     return (
-      <div className="h-dvh flex flex-col bg-gray-950 text-white overflow-hidden select-none">
-        <header className="h-11 bg-gray-900 border-b border-gray-700 flex items-center justify-center gap-2 flex-shrink-0">
-          <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center flex-shrink-0">
-            <Zap size={12} className="text-white" />
+      <div className="h-dvh flex flex-col bg-black text-white overflow-hidden select-none">
+
+        {/* Glass header */}
+        <header
+          className="flex-shrink-0 h-14 flex items-center justify-center gap-2.5 backdrop-blur-xl"
+          style={{
+            background: 'rgba(12,12,16,0.75)',
+            borderBottom: '1px solid rgba(255,255,255,0.07)',
+          }}
+        >
+          <div
+            className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)', boxShadow: '0 2px 12px rgba(99,102,241,0.5)' }}
+          >
+            <Zap size={14} className="text-white" />
           </div>
-          <h1 className="font-bold text-sm text-white">Scales</h1>
+          <h1 className="font-semibold text-base tracking-tight text-white">Scales</h1>
         </header>
 
+        {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col">
           {mobileTab === 'palette' && <BlockPalette />}
           {mobileTab === 'canvas'  && <Canvas />}
           {mobileTab === 'code'    && <CodePreview />}
         </div>
 
-        <nav
-          className="flex-shrink-0 bg-gray-900 border-t border-gray-700 flex"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        {/* Floating glass pill nav */}
+        <div
+          className="flex-shrink-0 flex justify-center px-6 pt-2"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}
         >
-          {MOBILE_TABS.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              onClick={() => setMobileTab(id)}
-              className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
-                mobileTab === id ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <Icon size={20} />
-              <span className="text-xs">{label}</span>
-            </button>
-          ))}
-        </nav>
+          <nav
+            className="flex gap-1 p-1.5 backdrop-blur-2xl rounded-full"
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1)',
+            }}
+          >
+            {MOBILE_TABS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                onClick={() => setMobileTab(id)}
+                className={`flex flex-col items-center gap-0.5 px-5 py-2 rounded-full transition-all duration-200 ${
+                  mobileTab === id ? 'text-white' : 'text-white/40'
+                }`}
+                style={mobileTab === id ? {
+                  background: 'rgba(255,255,255,0.18)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2)',
+                } : undefined}
+              >
+                <Icon size={22} strokeWidth={mobileTab === id ? 2 : 1.5} />
+                <span className="text-[10px] font-medium tracking-wide">{label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
       </div>
     );
   }
