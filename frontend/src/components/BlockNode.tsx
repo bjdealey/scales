@@ -417,12 +417,11 @@ function OutputVarField({
 }
 
 function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolean }) {
-  const [open, setOpen]       = useState(false);
-  const [query, setQuery]     = useState('');
+  const [open, setOpen]   = useState(false);
+  const [query, setQuery] = useState('');
   const addBlock   = useBlockStore((s) => s.addBlock);
   const anchorRef  = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const inputRef   = useRef<HTMLInputElement>(null);
 
   const filtered = BLOCK_TYPES.filter((type) =>
     BLOCK_META[type].label.toLowerCase().includes(query.toLowerCase()),
@@ -432,8 +431,6 @@ function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolea
 
   useEffect(() => {
     if (!open) return;
-    // Focus search input when dropdown opens
-    requestAnimationFrame(() => inputRef.current?.focus());
     const handler = (e: MouseEvent) => {
       const t = e.target as Node;
       if (!anchorRef.current?.contains(t) && !contentRef.current?.contains(t)) close();
@@ -444,37 +441,28 @@ function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolea
 
   return (
     <div ref={anchorRef} className="mt-1.5">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`w-full text-xs border border-dashed rounded-xl px-2 py-1 transition-colors text-left ${
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') close();
+          if (e.key === 'Enter' && filtered.length === 1) {
+            addBlock(filtered[0], parentId, inElse);
+            close();
+          }
+        }}
+        placeholder={`+ Add action${inElse ? ' (else)' : ''}`}
+        className={`w-full text-xs px-2 py-1 rounded-xl transition-colors focus:outline-none font-mono ${
           open
-            ? 'text-white/60 border-white/30'
-            : 'text-white/25 hover:text-white/60 border-white/15 hover:border-white/30'
+            ? 'bg-white/[0.08] border border-white/10 text-white placeholder-white/25'
+            : 'bg-transparent border border-dashed border-white/15 text-white/25 placeholder-white/25 hover:border-white/30 hover:placeholder-white/50 cursor-pointer'
         }`}
-      >
-        + Add action{inElse ? ' (else)' : ''}
-      </button>
+        spellCheck={false}
+      />
 
       <DropdownPortal anchorRef={anchorRef} contentRef={contentRef} open={open}>
         <div className="rounded-xl overflow-hidden" style={DROPDOWN_STYLE}>
-          <div className="p-2 border-b border-white/[0.06]">
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') close();
-                if (e.key === 'Enter' && filtered.length === 1) {
-                  addBlock(filtered[0], parentId, inElse);
-                  close();
-                }
-              }}
-              placeholder="Search actions..."
-              className="w-full bg-white/[0.06] rounded-lg px-2 py-1 text-xs text-white placeholder-white/25 focus:outline-none focus:bg-white/[0.10] transition-colors font-mono"
-              spellCheck={false}
-            />
-          </div>
           <div className="py-1">
             {filtered.length > 0 ? filtered.map((type) => {
               const meta = BLOCK_META[type];
