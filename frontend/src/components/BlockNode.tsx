@@ -1,6 +1,8 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, ArrowDown, ChevronDown, Plus, X } from 'lucide-react';
+import { ChevronDown, GripVertical, Plus, X } from 'lucide-react';
+import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Block, BlockType, BLOCK_META, PythonType, TYPE_LABELS } from '../types';
 import { useBlockStore } from '../store/blockStore';
 
@@ -766,33 +768,44 @@ function BlockParams({ block }: { block: Block }) {
 
 export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: number }) {
   const removeBlock = useBlockStore((s) => s.removeBlock);
-  const moveBlock   = useBlockStore((s) => s.moveBlock);
   const meta        = BLOCK_META[block.type];
 
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: block.id,
+  });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    position: 'relative',
+    zIndex: isDragging ? 50 : undefined,
+  };
+
   return (
-    <div className="my-1">
+    <div ref={setNodeRef} style={style} className="my-1">
       <div
         className={`rounded-2xl border ${meta.borderColor} overflow-hidden`}
         style={{ background: 'rgba(255,255,255,0.04)' }}
       >
-        <div className={`${meta.color} px-3 py-1.5 flex items-center justify-between`}>
-          <span className="text-white font-semibold text-xs uppercase tracking-wider">
+        <div className={`${meta.color} px-3 py-1.5 flex items-center gap-1.5`}>
+          {/* Drag handle — only this triggers drag, leaving inputs/buttons unaffected */}
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            className="flex-shrink-0 text-white/30 hover:text-white/70 cursor-grab active:cursor-grabbing touch-none transition-colors"
+            title="Drag to reorder"
+          >
+            <GripVertical size={13} />
+          </button>
+          <span className="text-white font-semibold text-xs uppercase tracking-wider flex-1">
             {meta.label}
           </span>
-          <div className="flex items-center gap-0.5">
-            <button onClick={() => moveBlock(block.id, 'up')} title="Move up"
-              className="text-white/50 hover:text-white w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition-colors">
-              <ArrowUp size={12} />
-            </button>
-            <button onClick={() => moveBlock(block.id, 'down')} title="Move down"
-              className="text-white/50 hover:text-white w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition-colors">
-              <ArrowDown size={12} />
-            </button>
-            <button onClick={() => removeBlock(block.id)} title="Remove block"
-              className="text-white/50 hover:text-red-300 w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition-colors ml-1">
-              <X size={12} />
-            </button>
-          </div>
+          <button onClick={() => removeBlock(block.id)} title="Remove"
+            className="text-white/50 hover:text-red-300 w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition-colors">
+            <X size={12} />
+          </button>
         </div>
 
         <div className="px-3 pb-3">
@@ -804,12 +817,14 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
               {block.children.length === 0 ? (
                 <AddBlockMenu parentId={block.id} />
               ) : (
-                block.children.map((child, i) => (
-                  <div key={child.id}>
-                    <BlockNode block={child} depth={depth + 1} />
-                    <InsertBlockMenu index={i + 1} parentId={block.id} />
-                  </div>
-                ))
+                <SortableContext items={block.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                  {block.children.map((child, i) => (
+                    <div key={child.id}>
+                      <BlockNode block={child} depth={depth + 1} />
+                      <InsertBlockMenu index={i + 1} parentId={block.id} />
+                    </div>
+                  ))}
+                </SortableContext>
               )}
             </div>
           )}
@@ -820,12 +835,14 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
               {block.elseChildren.length === 0 ? (
                 <AddBlockMenu parentId={block.id} inElse={true} />
               ) : (
-                block.elseChildren.map((child, i) => (
-                  <div key={child.id}>
-                    <BlockNode block={child} depth={depth + 1} />
-                    <InsertBlockMenu index={i + 1} parentId={block.id} inElse={true} />
-                  </div>
-                ))
+                <SortableContext items={block.elseChildren.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                  {block.elseChildren.map((child, i) => (
+                    <div key={child.id}>
+                      <BlockNode block={child} depth={depth + 1} />
+                      <InsertBlockMenu index={i + 1} parentId={block.id} inElse={true} />
+                    </div>
+                  ))}
+                </SortableContext>
               )}
             </div>
           )}
