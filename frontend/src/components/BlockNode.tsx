@@ -5,13 +5,20 @@ import { Block, BlockType, BLOCK_META, PythonType, TYPE_LABELS } from '../types'
 import { useBlockStore } from '../store/blockStore';
 
 const BLOCK_TYPES: BlockType[] = [
-  'http_request',
-  'set_variable',
-  'for_each',
-  'if_condition',
-  'print',
-  'file_write',
+  'http_request', 'set_variable', 'for_each', 'if_condition', 'print', 'file_write',
 ];
+
+// Infer a Python type from the literal content of a typed value.
+function inferType(value: string): PythonType {
+  const v = value.trim();
+  if (!v) return 'str';
+  if (/^(true|false)$/i.test(v)) return 'bool';
+  if (/^-?\d+$/.test(v)) return 'int';
+  if (/^-?(\d+\.\d*|\d*\.\d+)([eE][+-]?\d+)?$/.test(v)) return 'float';
+  if (v.startsWith('[') && v.endsWith(']')) return 'list';
+  if (v.startsWith('{') && v.endsWith('}')) return 'dict';
+  return 'str';
+}
 
 const TYPE_BADGE: Record<PythonType, string> = {
   str:   'bg-blue-600/80 text-blue-100',
@@ -24,16 +31,21 @@ const TYPE_BADGE: Record<PythonType, string> = {
   Any:   'bg-gray-500/80 text-gray-100',
 };
 
-type FieldMode = 'var' | 'literal';
-
 const INPUT_CLS =
   'bg-white/[0.08] border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-400/70 w-full font-mono placeholder-white/25';
 
 const LABEL_CLS = 'text-white/40 text-xs w-20 flex-shrink-0';
-const ROW_CLS = 'flex items-center gap-2';
+const ROW_CLS   = 'flex items-center gap-2';
 
-// Renders children into document.body at a fixed position relative to an anchor element.
-// Escapes both overflow:hidden cards and overflow-y:auto scroll containers.
+const DROPDOWN_STYLE: React.CSSProperties = {
+  background: 'rgba(3,7,18,0.97)',
+  border: '1px solid rgba(255,255,255,0.12)',
+  boxShadow: '0 16px 32px rgba(0,0,0,0.7)',
+  backdropFilter: 'blur(16px)',
+};
+
+// Renders children into document.body at a fixed position — escapes overflow:hidden cards
+// and overflow-y:auto scroll containers.
 function DropdownPortal({
   anchorRef,
   contentRef,
@@ -56,7 +68,6 @@ function DropdownPortal({
       setPos({ top: r.bottom + 4, left: r.left, width: r.width });
     };
     update();
-    // Re-position on any scroll or resize so the dropdown tracks the trigger
     window.addEventListener('scroll', update, true);
     window.addEventListener('resize', update);
     return () => {
@@ -70,13 +81,7 @@ function DropdownPortal({
   return createPortal(
     <div
       ref={contentRef}
-      style={{
-        position: 'fixed',
-        top: pos.top,
-        left: pos.left,
-        width: pos.width,
-        zIndex: 9999,
-      }}
+      style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
     >
       {children}
     </div>,
@@ -84,99 +89,134 @@ function DropdownPortal({
   );
 }
 
-const DROPDOWN_STYLE: React.CSSProperties = {
-  background: 'rgba(3,7,18,0.97)',
-  border: '1px solid rgba(255,255,255,0.12)',
-  boxShadow: '0 16px 32px rgba(0,0,0,0.7)',
-  backdropFilter: 'blur(16px)',
-};
-
-// Dropdown that lists existing variables filtered by type
-function VarPicker({
+// Unified combobox field: focus to see matching variables, type to filter,
+// select one to use it as a reference, or keep typing to use as a literal value.
+// A "Save as variable" option appears for unmatched typed values.
+function SmartField({
   value,
   onChange,
   types,
-  placeholder = 'Pick a variable…',
+  placeholder,
 }: {
   value: string;
-  onChange: (name: string) => void;
+  onChange: (v: string) => void;
   types?: PythonType[];
   placeholder?: string;
 }) {
-  const variables = useBlockStore((s) => s.variables);
-  const [open, setOpen] = useState(false);
-  const anchorRef = useRef<HTMLDivElement>(null);
+  const variables          = useBlockStore((s) => s.variables);
+  const addVariableWithName = useBlockStore((s) => s.addVariableWithName);
+  const [open, setOpen]       = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newVarName, setNewVarName] = useState('');
+  const anchorRef  = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const filtered = variables.filter(
+  // Variables compatible with this field's type filter
+  const compatible = variables.filter(
     (v) => v.name.trim() && (!types || types.includes(v.type)),
   );
-  const selected = filtered.find((v) => v.name === value);
+
+  // Filter by what the user has typed (substring match on variable name)
+  const filtered = value.trim()
+    ? compatible.filter((v) => v.name.toLowerCase().includes(value.toLowerCase()))
+    : compatible;
+
+  // If the current value exactly matches a variable name, it's a variable reference
+  const matchedVar = compatible.find((v) => v.name === value.trim()) ?? null;
+  const isVarRef   = matchedVar !== null;
+
+  const handleSelect = (name: string) => {
+    onChange(name);
+    setOpen(false);
+    setCreating(false);
+  };
+
+  const handleCreate = () => {
+    if (!newVarName.trim()) return;
+    addVariableWithName(newVarName.trim(), inferType(value), value.trim());
+    onChange(newVarName.trim());
+    setOpen(false);
+    setCreating(false);
+    setNewVarName('');
+  };
+
+  const cancelCreate = () => { setCreating(false); setNewVarName(''); };
 
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (!anchorRef.current?.contains(t) && !contentRef.current?.contains(t))
+      if (!anchorRef.current?.contains(t) && !contentRef.current?.contains(t)) {
         setOpen(false);
+        setCreating(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
+  const showCreate = open && value.trim() && !isVarRef;
+
   return (
     <div ref={anchorRef} className="flex-1 min-w-0">
-      {/* Styled container holding the trigger + optional × — avoids button-in-button */}
+      {/* Input row */}
       <div
-        className={`flex items-center bg-white/[0.08] border rounded-lg text-xs transition-colors ${
-          open ? 'border-blue-400/70' : 'border-white/10 hover:bg-white/[0.12]'
-        } ${selected ? 'text-white' : 'text-white/30'}`}
+        className={`flex items-center rounded-lg text-xs transition-all ${
+          isVarRef
+            ? 'bg-violet-950/40 border border-violet-500/40'
+            : 'bg-white/[0.08] border border-white/10 hover:bg-white/[0.12]'
+        }`}
       >
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 focus:outline-none"
-        >
-          {selected ? (
-            <>
-              <span className={`text-[10px] px-1 py-px rounded-full font-medium flex-shrink-0 ${TYPE_BADGE[selected.type]}`}>
-                {TYPE_LABELS[selected.type]}
-              </span>
-              <span className="font-mono flex-1 text-left truncate min-w-0">{selected.name}</span>
-            </>
-          ) : (
-            <span className="flex-1 text-left">{placeholder}</span>
-          )}
-          <ChevronDown size={10} className="flex-shrink-0 text-white/30" />
-        </button>
-        {selected && (
+        <input
+          value={value}
+          onChange={(e) => { onChange(e.target.value); setOpen(true); setCreating(false); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') { setOpen(false); setCreating(false); }
+            if (e.key === 'Enter' && filtered.length === 1) handleSelect(filtered[0].name);
+          }}
+          placeholder={placeholder}
+          className="flex-1 min-w-0 bg-transparent px-2 py-1 text-white placeholder-white/25 focus:outline-none font-mono"
+          spellCheck={false}
+        />
+        {/* Type badge when matched */}
+        {isVarRef && matchedVar && (
+          <span className={`text-[10px] px-1 py-px rounded-full font-medium flex-shrink-0 mr-1 ${TYPE_BADGE[matchedVar.type]}`}>
+            {TYPE_LABELS[matchedVar.type]}
+          </span>
+        )}
+        {/* Clear button */}
+        {value && (
           <button
             type="button"
-            onClick={() => { onChange(''); setOpen(false); }}
-            title="Remove variable"
-            className="flex-shrink-0 px-1.5 py-1 text-white/25 hover:text-red-400 transition-colors border-l border-white/10"
+            onClick={() => { onChange(''); setOpen(false); setCreating(false); }}
+            className={`flex-shrink-0 px-1.5 py-1 transition-colors ${
+              isVarRef
+                ? 'text-violet-400/50 hover:text-red-400 border-l border-violet-500/20'
+                : 'text-white/25 hover:text-red-400 border-l border-white/10'
+            }`}
           >
             <X size={10} />
           </button>
         )}
+        {!value && (
+          <ChevronDown size={10} className="flex-shrink-0 mr-2 text-white/20" />
+        )}
       </div>
 
+      {/* Dropdown portal */}
       <DropdownPortal anchorRef={anchorRef} contentRef={contentRef} open={open}>
         <div className="rounded-xl overflow-hidden" style={DROPDOWN_STYLE}>
-          {filtered.length === 0 ? (
-            <p className="px-3 py-3 text-[11px] text-white/30 text-center leading-relaxed">
-              {variables.filter((v) => v.name.trim()).length === 0
-                ? 'No variables yet — add some in the Variables tab'
-                : 'No variables of the right type'}
-            </p>
-          ) : (
-            <div className="py-1 max-h-48 overflow-y-auto">
+
+          {/* Variable list */}
+          {filtered.length > 0 && (
+            <div className={`py-1 max-h-44 overflow-y-auto ${showCreate ? 'border-b border-white/[0.06]' : ''}`}>
               {filtered.map((v) => (
                 <button
                   key={v.id}
                   type="button"
-                  onClick={() => { onChange(v.name); setOpen(false); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+                  onClick={() => handleSelect(v.name)}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
                     v.name === value ? 'bg-white/[0.10]' : 'hover:bg-white/[0.06]'
                   }`}
                 >
@@ -188,98 +228,69 @@ function VarPicker({
               ))}
             </div>
           )}
+
+          {/* Empty states */}
+          {filtered.length === 0 && !value.trim() && (
+            <p className="px-3 py-2.5 text-[11px] text-white/25 text-center">
+              {compatible.length === 0
+                ? 'No variables yet — add some in the Variables tab'
+                : 'No matching variables'}
+            </p>
+          )}
+          {filtered.length === 0 && value.trim() && !isVarRef && (
+            <p className="px-3 py-2 text-[11px] text-white/25">No matching variables</p>
+          )}
+
+          {/* Save as variable option */}
+          {showCreate && (
+            creating ? (
+              <div className="px-3 py-2 flex items-center gap-1.5">
+                <input
+                  autoFocus
+                  value={newVarName}
+                  onChange={(e) => setNewVarName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleCreate();
+                    if (e.key === 'Escape') cancelCreate();
+                  }}
+                  placeholder="variable_name"
+                  className="flex-1 bg-white/[0.08] border border-white/10 rounded-lg px-2 py-1 text-xs text-white placeholder-white/25 focus:outline-none focus:border-blue-400/70 font-mono"
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  onClick={handleCreate}
+                  disabled={!newVarName.trim()}
+                  className="text-[11px] px-2 py-1 rounded-lg bg-blue-600/60 hover:bg-blue-500/80 disabled:opacity-40 text-white flex-shrink-0 font-medium border border-blue-500/40 transition-colors"
+                >
+                  Save
+                </button>
+                <button type="button" onClick={cancelCreate} className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0">
+                  <X size={12} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setCreating(true); setNewVarName(''); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-blue-400/80 hover:text-blue-300 hover:bg-white/[0.04] transition-colors text-[11px]"
+              >
+                <Plus size={11} className="flex-shrink-0" />
+                <span className="flex-1">Save &ldquo;{value}&rdquo; as a variable</span>
+                <span className={`text-[10px] px-1.5 py-px rounded-full font-medium flex-shrink-0 ${TYPE_BADGE[inferType(value)]}`}>
+                  {TYPE_LABELS[inferType(value)]}
+                </span>
+              </button>
+            )
+          )}
         </div>
       </DropdownPortal>
     </div>
   );
 }
 
-// Value-mode input that offers to save its content as a new variable
-function ValInputWithSaveAs({
-  value,
-  onChange,
-  onCreateVar,
-  placeholder,
-  suggestedType = 'str',
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onCreateVar: (name: string) => void;
-  placeholder?: string;
-  suggestedType?: PythonType;
-}) {
-  const addVariableWithName = useBlockStore((s) => s.addVariableWithName);
-  const [naming, setNaming] = useState(false);
-  const [varName, setVarName] = useState('');
-
-  const handleCreate = () => {
-    if (!varName.trim()) return;
-    // Pass the current literal value so the new variable is pre-filled
-    addVariableWithName(varName.trim(), suggestedType, value.trim());
-    onCreateVar(varName.trim());
-    setNaming(false);
-    setVarName('');
-  };
-
-  const cancel = () => { setNaming(false); setVarName(''); };
-
-  if (naming) {
-    return (
-      <div className="flex items-center gap-1.5 flex-1 min-w-0">
-        <input
-          autoFocus
-          value={varName}
-          onChange={(e) => setVarName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleCreate();
-            if (e.key === 'Escape') cancel();
-          }}
-          placeholder="variable_name"
-          className={`${INPUT_CLS} flex-1 font-mono`}
-          spellCheck={false}
-        />
-        <button
-          type="button"
-          onClick={handleCreate}
-          disabled={!varName.trim()}
-          className="text-[11px] px-2 py-1 rounded-lg bg-blue-600/60 hover:bg-blue-500/80 disabled:opacity-40 text-white flex-shrink-0 font-medium border border-blue-500/40 transition-colors"
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          onClick={cancel}
-          className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
-        >
-          <X size={12} />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-1.5 flex-1 min-w-0">
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={`${INPUT_CLS} flex-1`}
-      />
-      {value.trim() && (
-        <button
-          type="button"
-          onClick={() => setNaming(true)}
-          title="Save as a variable"
-          className="flex-shrink-0 text-[10px] font-medium px-1.5 py-px rounded-md border bg-white/[0.06] border-white/10 text-white/30 hover:text-white/60 hover:bg-white/10 transition-all whitespace-nowrap"
-        >
-          + var
-        </button>
-      )}
-    </div>
-  );
-}
-
-// For "save as" / output variable name fields — existing vars + "+ Create" button
+// For "save as" / output variable name fields — user is naming an output variable,
+// not referencing one as a value. Dropdown shows existing vars to reuse + create option.
 function OutputVarField({
   value,
   onChange,
@@ -289,14 +300,25 @@ function OutputVarField({
   onChange: (name: string) => void;
   suggestedType?: PythonType;
 }) {
-  const variables = useBlockStore((s) => s.variables);
+  const variables           = useBlockStore((s) => s.variables);
   const addVariableWithName = useBlockStore((s) => s.addVariableWithName);
   const [open, setOpen] = useState(false);
-  const anchorRef = useRef<HTMLDivElement>(null);
+  const anchorRef  = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const named = variables.filter((v) => v.name.trim());
-  const exists = named.some((v) => v.name === value.trim());
+  const named    = variables.filter((v) => v.name.trim());
+  const filtered = value.trim()
+    ? named.filter((v) => v.name.toLowerCase().includes(value.toLowerCase()))
+    : named;
+  const matchedVar = named.find((v) => v.name === value.trim()) ?? null;
+  const exists     = matchedVar !== null;
+  const showCreate = open && !!value.trim() && !exists;
+
+  const handleSelect = (name: string) => { onChange(name); setOpen(false); };
+  const handleCreate = () => {
+    addVariableWithName(value.trim(), suggestedType);
+    setOpen(false);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -311,47 +333,83 @@ function OutputVarField({
 
   return (
     <div ref={anchorRef} className="flex-1 min-w-0">
-      <div className="flex gap-1.5">
+      <div
+        className={`flex items-center rounded-lg text-xs transition-all ${
+          exists
+            ? 'bg-violet-950/40 border border-violet-500/40'
+            : 'bg-white/[0.08] border border-white/10 hover:bg-white/[0.12]'
+        }`}
+      >
         <input
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => named.length > 0 && setOpen(true)}
+          onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setOpen(false);
+            if (e.key === 'Enter' && filtered.length === 1) handleSelect(filtered[0].name);
+            if (e.key === 'Enter' && showCreate && filtered.length === 0) handleCreate();
+          }}
           placeholder="variable_name"
-          className={`${INPUT_CLS} flex-1`}
+          className="flex-1 min-w-0 bg-transparent px-2 py-1 text-white placeholder-white/25 focus:outline-none font-mono"
           spellCheck={false}
         />
-        {!exists && value.trim() && (
+        {exists && matchedVar && (
+          <span className={`text-[10px] px-1 py-px rounded-full font-medium flex-shrink-0 mr-1 ${TYPE_BADGE[matchedVar.type]}`}>
+            {TYPE_LABELS[matchedVar.type]}
+          </span>
+        )}
+        {value && (
           <button
             type="button"
-            onClick={() => { addVariableWithName(value.trim(), suggestedType); setOpen(false); }}
-            title={`Create "${value.trim()}" as a ${suggestedType} variable`}
-            className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-blue-600/60 hover:bg-blue-500/80 text-white transition-colors flex-shrink-0 font-medium border border-blue-500/40"
+            onClick={() => { onChange(''); setOpen(false); }}
+            className={`flex-shrink-0 px-1.5 py-1 transition-colors ${
+              exists
+                ? 'text-violet-400/50 hover:text-red-400 border-l border-violet-500/20'
+                : 'text-white/25 hover:text-red-400 border-l border-white/10'
+            }`}
           >
-            <Plus size={10} />
-            Create
+            <X size={10} />
           </button>
         )}
+        {!value && <ChevronDown size={10} className="flex-shrink-0 mr-2 text-white/20" />}
       </div>
 
       <DropdownPortal anchorRef={anchorRef} contentRef={contentRef} open={open}>
         <div className="rounded-xl overflow-hidden" style={DROPDOWN_STYLE}>
-          <div className="py-1 max-h-48 overflow-y-auto">
-            {named.map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                onClick={() => { onChange(v.name); setOpen(false); }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
-                  v.name === value ? 'bg-white/[0.10]' : 'hover:bg-white/[0.06]'
-                }`}
-              >
-                <span className={`text-[10px] px-1.5 py-px rounded-full font-medium flex-shrink-0 ${TYPE_BADGE[v.type]}`}>
-                  {TYPE_LABELS[v.type]}
-                </span>
-                <span className="text-xs font-mono text-white">{v.name}</span>
-              </button>
-            ))}
-          </div>
+          {filtered.length > 0 && (
+            <div className={`py-1 max-h-44 overflow-y-auto ${showCreate ? 'border-b border-white/[0.06]' : ''}`}>
+              {filtered.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => handleSelect(v.name)}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
+                    v.name === value ? 'bg-white/[0.10]' : 'hover:bg-white/[0.06]'
+                  }`}
+                >
+                  <span className={`text-[10px] px-1.5 py-px rounded-full font-medium flex-shrink-0 ${TYPE_BADGE[v.type]}`}>
+                    {TYPE_LABELS[v.type]}
+                  </span>
+                  <span className="text-xs font-mono text-white">{v.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {filtered.length === 0 && !value.trim() && (
+            <p className="px-3 py-2.5 text-[11px] text-white/25 text-center">
+              {named.length === 0 ? 'No variables yet' : 'No matching variables'}
+            </p>
+          )}
+          {showCreate && (
+            <button
+              type="button"
+              onClick={handleCreate}
+              className="w-full flex items-center gap-2 px-3 py-2 text-left text-blue-400/80 hover:text-blue-300 hover:bg-white/[0.04] transition-colors text-[11px]"
+            >
+              <Plus size={11} className="flex-shrink-0" />
+              Create variable &ldquo;{value}&rdquo;
+            </button>
+          )}
         </div>
       </DropdownPortal>
     </div>
@@ -390,7 +448,10 @@ function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolea
               );
             })}
           </div>
-          <button onClick={() => setOpen(false)} className="text-xs text-white/30 hover:text-white/60 transition-colors">
+          <button
+            onClick={() => setOpen(false)}
+            className="text-xs text-white/30 hover:text-white/60 transition-colors"
+          >
             Cancel
           </button>
         </div>
@@ -402,62 +463,9 @@ function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolea
 function BlockParams({ block }: { block: Block }) {
   const updateBlock = useBlockStore((s) => s.updateBlock);
 
-  const up = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+  const up  = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     updateBlock(block.id, { [key]: e.target.value });
-
   const set = (key: string, val: string) => updateBlock(block.id, { [key]: val });
-
-  const getMode = (fieldName: string, def: FieldMode): FieldMode =>
-    (block.params[`${fieldName}_mode`] as FieldMode) || def;
-
-  const modeBtn = (fieldName: string, def: FieldMode) => {
-    const cur = getMode(fieldName, def);
-    return (
-      <button
-        type="button"
-        title={cur === 'var' ? 'Switch to value input' : 'Switch to variable picker'}
-        onClick={() => {
-          const next: FieldMode = cur === 'var' ? 'literal' : 'var';
-          updateBlock(block.id, { [`${fieldName}_mode`]: next, [fieldName]: '' });
-        }}
-        className={`flex-shrink-0 text-[10px] font-bold px-1.5 py-px rounded-md transition-all border ${
-          cur === 'var'
-            ? 'bg-violet-600/25 border-violet-500/35 text-violet-300'
-            : 'bg-white/[0.06] border-white/10 text-white/30 hover:text-white/60'
-        }`}
-      >
-        {cur === 'var' ? 'var' : 'val'}
-      </button>
-    );
-  };
-
-  const varOrInput = (
-    fieldName: string,
-    def: FieldMode,
-    opts: { types?: PythonType[]; placeholder?: string; suggestedType?: PythonType } = {},
-  ) => {
-    if (getMode(fieldName, def) === 'var') {
-      return (
-        <VarPicker
-          value={block.params[fieldName] || ''}
-          onChange={(v) => set(fieldName, v)}
-          types={opts.types}
-          placeholder={opts.placeholder}
-        />
-      );
-    }
-    return (
-      <ValInputWithSaveAs
-        value={block.params[fieldName] || ''}
-        onChange={(v) => set(fieldName, v)}
-        onCreateVar={(name) =>
-          updateBlock(block.id, { [`${fieldName}_mode`]: 'var', [fieldName]: name })
-        }
-        placeholder={opts.placeholder}
-        suggestedType={opts.suggestedType || 'str'}
-      />
-    );
-  };
 
   switch (block.type) {
     case 'http_request':
@@ -471,18 +479,30 @@ function BlockParams({ block }: { block: Block }) {
           </div>
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>URL</span>
-            {modeBtn('url', 'literal')}
-            {varOrInput('url', 'literal', { types: ['str', 'Any'], placeholder: 'api.example.com/v1/endpoint', suggestedType: 'str' })}
+            <SmartField
+              value={block.params.url || ''}
+              onChange={(v) => set('url', v)}
+              types={['str', 'Any']}
+              placeholder="api.example.com/v1/endpoint"
+            />
           </div>
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>Save as</span>
-            <OutputVarField value={block.params.varName || ''} onChange={(v) => set('varName', v)} suggestedType="Any" />
+            <OutputVarField
+              value={block.params.varName || ''}
+              onChange={(v) => set('varName', v)}
+              suggestedType="Any"
+            />
           </div>
           {['POST', 'PUT', 'PATCH'].includes(block.params.method || 'GET') && (
             <div className={ROW_CLS}>
               <span className={LABEL_CLS}>Body</span>
-              {modeBtn('body', 'var')}
-              {varOrInput('body', 'var', { types: ['dict', 'Any'], placeholder: '{"key": "value"}', suggestedType: 'Any' })}
+              <SmartField
+                value={block.params.body || ''}
+                onChange={(v) => set('body', v)}
+                types={['dict', 'Any']}
+                placeholder='{"key": "value"}'
+              />
             </div>
           )}
         </div>
@@ -493,12 +513,19 @@ function BlockParams({ block }: { block: Block }) {
         <div className="space-y-1.5 mt-2">
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>Variable</span>
-            <OutputVarField value={block.params.name || ''} onChange={(v) => set('name', v)} suggestedType="Any" />
+            <OutputVarField
+              value={block.params.name || ''}
+              onChange={(v) => set('name', v)}
+              suggestedType="Any"
+            />
           </div>
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>Value</span>
-            {modeBtn('value', 'var')}
-            {varOrInput('value', 'var', { placeholder: '"hello" or expression', suggestedType: 'Any' })}
+            <SmartField
+              value={block.params.value || ''}
+              onChange={(v) => set('value', v)}
+              placeholder="value or expression"
+            />
           </div>
         </div>
       );
@@ -517,8 +544,12 @@ function BlockParams({ block }: { block: Block }) {
           </div>
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>in</span>
-            {modeBtn('iterable', 'var')}
-            {varOrInput('iterable', 'var', { types: ['list', 'dict', 'Any'], placeholder: 'my_list or expression', suggestedType: 'list' })}
+            <SmartField
+              value={block.params.iterable || ''}
+              onChange={(v) => set('iterable', v)}
+              types={['list', 'dict', 'Any']}
+              placeholder="my_list"
+            />
           </div>
         </div>
       );
@@ -527,8 +558,12 @@ function BlockParams({ block }: { block: Block }) {
       return (
         <div className={`${ROW_CLS} mt-2`}>
           <span className="text-white/35 text-xs font-mono flex-shrink-0">if</span>
-          {modeBtn('condition', 'var')}
-          {varOrInput('condition', 'var', { types: ['bool', 'Any'], placeholder: 'response.ok', suggestedType: 'Any' })}
+          <SmartField
+            value={block.params.condition || ''}
+            onChange={(v) => set('condition', v)}
+            types={['bool', 'Any']}
+            placeholder="response.ok"
+          />
           <span className="text-white/35 text-xs font-mono flex-shrink-0">:</span>
         </div>
       );
@@ -537,8 +572,11 @@ function BlockParams({ block }: { block: Block }) {
       return (
         <div className={`${ROW_CLS} mt-2`}>
           <span className="text-white/35 text-xs font-mono flex-shrink-0">print(</span>
-          {modeBtn('expression', 'var')}
-          {varOrInput('expression', 'var', { placeholder: 'Hello, world!', suggestedType: 'str' })}
+          <SmartField
+            value={block.params.expression || ''}
+            onChange={(v) => set('expression', v)}
+            placeholder="Hello, world!"
+          />
           <span className="text-white/35 text-xs font-mono flex-shrink-0">)</span>
         </div>
       );
@@ -548,13 +586,20 @@ function BlockParams({ block }: { block: Block }) {
         <div className="space-y-1.5 mt-2">
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>Path</span>
-            {modeBtn('path', 'literal')}
-            {varOrInput('path', 'literal', { types: ['str', 'Any'], placeholder: 'output.txt', suggestedType: 'str' })}
+            <SmartField
+              value={block.params.path || ''}
+              onChange={(v) => set('path', v)}
+              types={['str', 'Any']}
+              placeholder="output.txt"
+            />
           </div>
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>Content</span>
-            {modeBtn('content', 'var')}
-            {varOrInput('content', 'var', { placeholder: 'data to write', suggestedType: 'str' })}
+            <SmartField
+              value={block.params.content || ''}
+              onChange={(v) => set('content', v)}
+              placeholder="data to write"
+            />
           </div>
         </div>
       );
@@ -566,8 +611,8 @@ function BlockParams({ block }: { block: Block }) {
 
 export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: number }) {
   const removeBlock = useBlockStore((s) => s.removeBlock);
-  const moveBlock = useBlockStore((s) => s.moveBlock);
-  const meta = BLOCK_META[block.type];
+  const moveBlock   = useBlockStore((s) => s.moveBlock);
+  const meta        = BLOCK_META[block.type];
 
   return (
     <div className="my-1">

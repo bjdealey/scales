@@ -29,6 +29,62 @@ interface BlockStore {
   moveDictEntry: (id: string, index: number, direction: 'up' | 'down') => void;
 }
 
+// Converts Python literal syntax to JSON so we can parse it:
+// True/False/None → true/false/null, single quotes → double quotes.
+function pyToJson(s: string): string {
+  return s
+    .replace(/\bTrue\b/g, 'true')
+    .replace(/\bFalse\b/g, 'false')
+    .replace(/\bNone\b/g, 'null')
+    .replace(/'/g, '"');
+}
+
+function parseListItems(raw: string): ListItem[] {
+  try {
+    const parsed = JSON.parse(pyToJson(raw));
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item): ListItem => {
+      if (typeof item === 'boolean') return { type: 'bool', value: item ? 'True' : 'False' };
+      if (typeof item === 'number')
+        return Number.isInteger(item)
+          ? { type: 'int', value: String(item) }
+          : { type: 'float', value: String(item) };
+      if (typeof item === 'string') return { type: 'str', value: item };
+      return { type: 'str', value: String(item) };
+    });
+  } catch {
+    return [];
+  }
+}
+
+function parseDictEntries(raw: string): DictEntry[] {
+  try {
+    const parsed = JSON.parse(pyToJson(raw));
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return [];
+    return Object.entries(parsed).map(([key, val]): DictEntry => {
+      if (typeof val === 'boolean') return { key, valueType: 'bool', value: val ? 'True' : 'False' };
+      if (typeof val === 'number')
+        return Number.isInteger(val)
+          ? { key, valueType: 'int', value: String(val) }
+          : { key, valueType: 'float', value: String(val) };
+      if (typeof val === 'string') return { key, valueType: 'str', value: val };
+      return { key, valueType: 'str', value: String(val) };
+    });
+  } catch {
+    return [];
+  }
+}
+
+function clearVarRefs(blocks: Block[], name: string): void {
+  for (const block of blocks) {
+    for (const key of Object.keys(block.params)) {
+      if (block.params[key] === name) block.params[key] = '';
+    }
+    clearVarRefs(block.children, name);
+    clearVarRefs(block.elseChildren, name);
+  }
+}
+
 function createBlock(type: BlockType): Block {
   return {
     id: uuid(),
@@ -166,13 +222,18 @@ export const useBlockStore = create<BlockStore>()(
 
     addVariableWithName: (name: string, type: PythonType, initialValue?: string) => {
       set((state) => {
+        const raw = initialValue ?? TYPE_DEFAULTS[type];
+        // Normalize bool casing; parse structured types into their item/entry arrays.
+        const value   = type === 'bool' ? (/^false$/i.test(raw) ? 'False' : 'True') : (type === 'list' || type === 'dict' ? '' : raw);
+        const items   = type === 'list' && initialValue ? parseListItems(initialValue) : [];
+        const entries = type === 'dict' && initialValue ? parseDictEntries(initialValue) : [];
         state.variables.push({
           id: uuid(),
           name,
           type,
-          value: initialValue ?? TYPE_DEFAULTS[type],
-          items: [],
-          entries: [],
+          value,
+          items,
+          entries,
           locked: false,
           constant: false,
         });
@@ -182,7 +243,10 @@ export const useBlockStore = create<BlockStore>()(
     removeVariable: (id) => {
       set((state) => {
         const idx = state.variables.findIndex((v) => v.id === id);
-        if (idx !== -1) state.variables.splice(idx, 1);
+        if (idx === -1) return;
+        const name = state.variables[idx].name.trim();
+        state.variables.splice(idx, 1);
+        if (name) clearVarRefs(state.blocks, name);
       });
     },
 

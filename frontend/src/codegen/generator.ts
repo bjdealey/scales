@@ -15,79 +15,76 @@ function escapeStr(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
-// Resolve a block param field.
-// - mode 'var' (or default 'var'): value is a variable name, used as-is
-// - mode 'literal' (or default 'literal'): value is a user-typed literal
-//   - autoQuote true: wrap as Python string "value"
-//   - autoQuote false: use as-is (Python expression)
+// If the value exactly matches a named variable, use it as-is (variable reference).
+// Otherwise treat as a literal: auto-quote string fields, pass expressions through raw.
 function resolveField(
   value: string,
-  mode: string | undefined,
-  defaultMode: 'var' | 'literal',
+  varNames: Set<string>,
   autoQuote: boolean,
   emptyFallback: string,
 ): string {
-  const isVar = (mode || defaultMode) === 'var';
-  if (isVar) return value.trim() || emptyFallback;
-  if (!value.trim()) return autoQuote ? `"${emptyFallback}"` : emptyFallback;
-  return autoQuote ? `"${escapeStr(value.trim())}"` : value.trim();
+  const v = value.trim();
+  if (!v) return autoQuote ? `"${emptyFallback}"` : emptyFallback;
+  if (varNames.has(v)) return v;
+  if (autoQuote) return `"${escapeStr(v)}"`;
+  return v;
 }
 
-function generateBlock(block: Block, indent: number): string {
-  const pad = '    '.repeat(indent);
+function generateBlock(block: Block, indent: number, varNames: Set<string>): string {
+  const pad  = '    '.repeat(indent);
   const pad1 = '    '.repeat(indent + 1);
 
   switch (block.type as BlockType) {
     case 'http_request': {
-      const { method = 'GET', url = '', url_mode, varName = 'response', body = '', body_mode } = block.params;
+      const { method = 'GET', url = '', varName = 'response', body = '' } = block.params;
       const m = method.toLowerCase();
-      const urlExpr = resolveField(url, url_mode, 'literal', true, 'https://api.example.com');
-      const bodyExpr = resolveField(body, body_mode, 'var', false, '{}');
-      const bodyArg = body.trim() && ['post', 'put', 'patch'].includes(m) ? `, json=${bodyExpr}` : '';
+      const urlExpr  = resolveField(url,  varNames, true,  'https://api.example.com');
+      const bodyExpr = resolveField(body, varNames, false, '{}');
+      const bodyArg  = body.trim() && ['post', 'put', 'patch'].includes(m)
+        ? `, json=${bodyExpr}` : '';
       return `${pad}${varName.trim() || 'response'} = requests.${m}(${urlExpr}${bodyArg})`;
     }
 
     case 'set_variable': {
-      const { name = 'variable', value = '', value_mode } = block.params;
-      const valueExpr = resolveField(value, value_mode, 'var', false, 'None');
+      const { name = 'variable', value = '' } = block.params;
+      const valueExpr = resolveField(value, varNames, false, 'None');
       return `${pad}${name.trim() || 'variable'} = ${valueExpr}`;
     }
 
     case 'for_each': {
-      const { itemVar = 'item', iterable = '', iterable_mode } = block.params;
-      const iterExpr = resolveField(iterable, iterable_mode, 'var', false, '[]');
-      const body =
-        block.children.length > 0
-          ? block.children.map((c) => generateBlock(c, indent + 1)).join('\n')
-          : `${pad1}pass`;
+      const { itemVar = 'item', iterable = '' } = block.params;
+      const iterExpr = resolveField(iterable, varNames, false, '[]');
+      const body = block.children.length > 0
+        ? block.children.map((c) => generateBlock(c, indent + 1, varNames)).join('\n')
+        : `${pad1}pass`;
       return `${pad}for ${itemVar.trim() || 'item'} in ${iterExpr}:\n${body}`;
     }
 
     case 'if_condition': {
-      const { condition = '', condition_mode } = block.params;
-      const condExpr = resolveField(condition, condition_mode, 'var', false, 'True');
-      const body =
-        block.children.length > 0
-          ? block.children.map((c) => generateBlock(c, indent + 1)).join('\n')
-          : `${pad1}pass`;
+      const { condition = '' } = block.params;
+      const condExpr = resolveField(condition, varNames, false, 'True');
+      const body = block.children.length > 0
+        ? block.children.map((c) => generateBlock(c, indent + 1, varNames)).join('\n')
+        : `${pad1}pass`;
       let code = `${pad}if ${condExpr}:\n${body}`;
       if (block.elseChildren.length > 0) {
-        const elseBody = block.elseChildren.map((c) => generateBlock(c, indent + 1)).join('\n');
+        const elseBody = block.elseChildren
+          .map((c) => generateBlock(c, indent + 1, varNames)).join('\n');
         code += `\n${pad}else:\n${elseBody}`;
       }
       return code;
     }
 
     case 'print': {
-      const { expression = '', expression_mode } = block.params;
-      const exprCode = resolveField(expression, expression_mode, 'var', true, '');
+      const { expression = '' } = block.params;
+      const exprCode = resolveField(expression, varNames, true, '');
       return `${pad}print(${exprCode || '""'})`;
     }
 
     case 'file_write': {
-      const { path = '', path_mode, content = '', content_mode } = block.params;
-      const pathExpr = resolveField(path, path_mode, 'literal', true, 'output.txt');
-      const contentExpr = resolveField(content, content_mode, 'var', true, '');
+      const { path = '', content = '' } = block.params;
+      const pathExpr    = resolveField(path,    varNames, true, 'output.txt');
+      const contentExpr = resolveField(content, varNames, true, '');
       return `${pad}with open(${pathExpr}, 'w') as f:\n${pad1}f.write(str(${contentExpr || '""'}))`;
     }
 
@@ -98,39 +95,36 @@ function generateBlock(block: Block, indent: number): string {
 
 function formatPrimitive(type: PrimitiveType, value: string): string {
   switch (type) {
-    case 'str': return `"${escapeStr(value)}"`;
-    case 'int': return value.trim() || '0';
+    case 'str':   return `"${escapeStr(value)}"`;
+    case 'int':   return value.trim() || '0';
     case 'float': { const f = value.trim() || '0.0'; return f.includes('.') ? f : `${f}.0`; }
-    case 'bool': return value === 'False' ? 'False' : 'True';
+    case 'bool':  return value === 'False' ? 'False' : 'True';
   }
 }
 
 function formatValue(v: Variable): string {
   switch (v.type) {
-    case 'str':
-      return `"${escapeStr(v.value)}"`;
-    case 'int':
-      return v.value.trim() || '0';
+    case 'str':   return `"${escapeStr(v.value)}"`;
+    case 'int':   return v.value.trim() || '0';
     case 'float': {
       const f = v.value.trim() || '0.0';
       return f.includes('.') ? f : `${f}.0`;
     }
-    case 'bool':
-      return v.value === 'False' ? 'False' : 'True';
+    case 'bool':  return v.value === 'False' ? 'False' : 'True';
     case 'list': {
       if (v.items.length === 0) return '[]';
-      return `[${v.items.map((item: ListItem) => formatPrimitive(item.type, item.value)).join(', ')}]`;
+      return `[${v.items.map((item: ListItem) =>
+        formatPrimitive(item.type, item.value)).join(', ')}]`;
     }
     case 'dict': {
       const valid = v.entries.filter((e: DictEntry) => e.key.trim());
       if (valid.length === 0) return '{}';
-      const pairs = valid.map((e: DictEntry) => `"${escapeStr(e.key)}": ${formatPrimitive(e.valueType, e.value)}`);
+      const pairs = valid.map((e: DictEntry) =>
+        `"${escapeStr(e.key)}": ${formatPrimitive(e.valueType, e.value)}`);
       return `{${pairs.join(', ')}}`;
     }
-    case 'None':
-      return 'None';
-    case 'Any':
-      return v.value.trim() || 'None';
+    case 'None': return 'None';
+    case 'Any':  return v.value.trim() || 'None';
   }
 }
 
@@ -139,12 +133,9 @@ function generateVariables(variables: Variable[]): string {
     .filter((v) => v.name.trim())
     .map((v) => {
       const typed = v.type !== 'None' && v.type !== 'Any';
-      let annotation: string;
-      if (v.constant) {
-        annotation = typed ? `: Final[${v.type}]` : ': Final';
-      } else {
-        annotation = typed ? `: ${v.type}` : '';
-      }
+      const annotation = v.constant
+        ? (typed ? `: Final[${v.type}]` : ': Final')
+        : (typed ? `: ${v.type}` : '');
       return `${v.name}${annotation} = ${formatValue(v)}`;
     })
     .join('\n');
@@ -156,13 +147,16 @@ export function generatePython(blocks: Block[], variables: Variable[] = []): str
     return '# Add variables or blocks to generate Python code';
   }
 
+  const varNames = new Set(namedVars.map((v) => v.name));
+
   const imports = collectImports(blocks);
   const stdImports = [...imports].map((m) => `import ${m}`);
   const needsFinal = namedVars.some((v) => v.constant);
   if (needsFinal) stdImports.unshift('from typing import Final');
+
   const importLines = stdImports.join('\n');
-  const varLines = generateVariables(variables);
-  const codeLines = blocks.map((b) => generateBlock(b, 0)).join('\n');
+  const varLines    = generateVariables(variables);
+  const codeLines   = blocks.map((b) => generateBlock(b, 0, varNames)).join('\n');
 
   return [importLines || null, varLines || null, codeLines || null]
     .filter(Boolean)
