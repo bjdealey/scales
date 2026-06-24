@@ -1,6 +1,6 @@
 import { Zap } from 'lucide-react';
 import { useBlockStore } from '../store/blockStore';
-import BlockNode from './BlockNode';
+import BlockNode, { InsertBlockMenu } from './BlockNode';
 
 export default function Canvas() {
   const blocks = useBlockStore((s) => s.blocks);
@@ -39,8 +39,11 @@ export default function Canvas() {
           </div>
         ) : (
           <div className="max-w-2xl">
-            {blocks.map((block) => (
-              <BlockNode key={block.id} block={block} />
+            {blocks.map((block, i) => (
+              <div key={block.id}>
+                {i > 0 && <InsertBlockMenu index={i} />}
+                <BlockNode block={block} />
+              </div>
             ))}
           </div>
         )}

@@ -9,6 +9,7 @@ interface BlockStore {
   variableSortMode: SortMode;
   setVariableSortMode: (mode: SortMode) => void;
   addBlock: (type: BlockType, parentId?: string, inElse?: boolean) => void;
+  insertBlock: (type: BlockType, index: number, parentId?: string, inElse?: boolean) => void;
   removeBlock: (id: string) => void;
   updateBlock: (id: string, params: Record<string, string>) => void;
   moveBlock: (id: string, direction: 'up' | 'down') => void;
@@ -116,6 +117,25 @@ function findAndAdd(
   return false;
 }
 
+function findAndInsert(
+  blocks: Block[],
+  parentId: string,
+  newBlock: Block,
+  index: number,
+  inElse: boolean,
+): boolean {
+  for (const block of blocks) {
+    if (block.id === parentId) {
+      const arr = inElse ? block.elseChildren : block.children;
+      arr.splice(index, 0, newBlock);
+      return true;
+    }
+    if (findAndInsert(block.children, parentId, newBlock, index, inElse)) return true;
+    if (findAndInsert(block.elseChildren, parentId, newBlock, index, inElse)) return true;
+  }
+  return false;
+}
+
 function findAndRemove(blocks: Block[], id: string): boolean {
   for (let i = 0; i < blocks.length; i++) {
     if (blocks[i].id === id) {
@@ -177,6 +197,17 @@ export const useBlockStore = create<BlockStore>()(
           state.blocks.push(newBlock);
         } else {
           findAndAdd(state.blocks, parentId, newBlock, inElse);
+        }
+      });
+    },
+
+    insertBlock: (type, index, parentId, inElse = false) => {
+      set((state) => {
+        const newBlock = createBlock(type);
+        if (!parentId) {
+          state.blocks.splice(index, 0, newBlock);
+        } else {
+          findAndInsert(state.blocks, parentId, newBlock, index, inElse);
         }
       });
     },

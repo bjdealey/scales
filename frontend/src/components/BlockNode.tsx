@@ -416,6 +416,90 @@ function OutputVarField({
   );
 }
 
+// Compact "+" circle that appears between blocks, opens the same action combobox.
+export function InsertBlockMenu({ index, parentId, inElse }: { index: number; parentId?: string; inElse?: boolean }) {
+  const [open, setOpen]   = useState(false);
+  const [query, setQuery] = useState('');
+  const insertBlock = useBlockStore((s) => s.insertBlock);
+  const anchorRef   = useRef<HTMLButtonElement>(null);
+  const contentRef  = useRef<HTMLDivElement>(null);
+  const inputRef    = useRef<HTMLInputElement>(null);
+
+  const filtered = BLOCK_TYPES.filter((type) =>
+    BLOCK_META[type].label.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  const close = () => { setOpen(false); setQuery(''); };
+
+  useEffect(() => {
+    if (!open) return;
+    requestAnimationFrame(() => inputRef.current?.focus());
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!anchorRef.current?.contains(t) && !contentRef.current?.contains(t)) close();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div className="flex items-center justify-center my-0.5 group">
+      <button
+        ref={anchorRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`w-5 h-5 rounded-full border border-dashed flex items-center justify-center transition-all ${
+          open
+            ? 'border-white/40 bg-white/[0.08] text-white/60'
+            : 'border-white/15 text-white/20 group-hover:border-white/35 group-hover:text-white/45'
+        }`}
+      >
+        <Plus size={9} />
+      </button>
+
+      <DropdownPortal anchorRef={anchorRef} contentRef={contentRef} open={open}>
+        <div className="rounded-xl overflow-hidden" style={DROPDOWN_STYLE}>
+          <div className="p-2 border-b border-white/[0.06]">
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') close();
+                if (e.key === 'Enter' && filtered.length === 1) {
+                  insertBlock(filtered[0], index, parentId, inElse);
+                  close();
+                }
+              }}
+              placeholder="Insert action..."
+              className="w-full bg-white/[0.06] rounded-lg px-2 py-1 text-xs text-white placeholder-white/25 focus:outline-none focus:bg-white/[0.10] transition-colors font-mono"
+              spellCheck={false}
+            />
+          </div>
+          <div className="py-1">
+            {filtered.length > 0 ? filtered.map((type) => {
+              const meta = BLOCK_META[type];
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => { insertBlock(type, index, parentId, inElse); close(); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/[0.06] transition-colors"
+                >
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.color}`} />
+                  <span className="text-xs text-white">{meta.label}</span>
+                </button>
+              );
+            }) : (
+              <p className="px-3 py-2 text-[11px] text-white/25">No matching actions</p>
+            )}
+          </div>
+        </div>
+      </DropdownPortal>
+    </div>
+  );
+}
+
 function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolean }) {
   const [open, setOpen]   = useState(false);
   const [query, setQuery] = useState('');
@@ -673,8 +757,11 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
           {meta.isContainer && (
             <div className="mt-3 pl-3 border-l border-white/15">
               <p className="text-xs text-white/30 mb-1 font-mono">do:</p>
-              {block.children.map((child) => (
-                <BlockNode key={child.id} block={child} depth={depth + 1} />
+              {block.children.map((child, i) => (
+                <div key={child.id}>
+                  {i > 0 && <InsertBlockMenu index={i} parentId={block.id} />}
+                  <BlockNode block={child} depth={depth + 1} />
+                </div>
               ))}
               <AddBlockMenu parentId={block.id} />
             </div>
@@ -683,8 +770,11 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
           {block.type === 'if_condition' && (
             <div className="mt-3 pl-3 border-l border-white/15">
               <p className="text-xs text-white/30 mb-1 font-mono">else: (optional)</p>
-              {block.elseChildren.map((child) => (
-                <BlockNode key={child.id} block={child} depth={depth + 1} />
+              {block.elseChildren.map((child, i) => (
+                <div key={child.id}>
+                  {i > 0 && <InsertBlockMenu index={i} parentId={block.id} inElse={true} />}
+                  <BlockNode block={child} depth={depth + 1} />
+                </div>
               ))}
               <AddBlockMenu parentId={block.id} inElse={true} />
             </div>
