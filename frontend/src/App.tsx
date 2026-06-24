@@ -21,6 +21,7 @@ import {
   Play,
   Redo2,
   Undo2,
+  X,
   Zap,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -116,7 +117,12 @@ export default function App() {
 
   const [fileName, setFileName]         = useState('Untitled');
   const [editingName, setEditingName]   = useState(false);
-  const [runState, setRunState]         = useState<'idle' | 'done'>('idle');
+
+  // null = still checking, true = backend found, false = no backend
+  const [backendAvailable, setBackendAvailable] = useState<boolean | null>(null);
+  const [running, setRunning]   = useState(false);
+  const [runResult, setRunResult] = useState<{ stdout: string; stderr: string; returncode: number } | null>(null);
+  const [copied, setCopied]     = useState(false);
 
   const [leftWidth, setLeftWidth]   = useState(LEFT_DEFAULT);
   const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT);
@@ -160,7 +166,18 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [undo, redo]);
 
-  // ── Export / Run ─────────────────────────────────────────────────────────
+  // ── Backend availability check ───────────────────────────────────────────
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    fetch('/api/run', { method: 'HEAD', signal: controller.signal })
+      .then(() => setBackendAvailable(true))
+      .catch((err) => { if (err.name !== 'AbortError') setBackendAvailable(false); })
+      .finally(() => clearTimeout(timer));
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, []);
+
+  // ── Export / Run / Copy ───────────────────────────────────────────────────
   const handleExport = useCallback(() => {
     const code = generatePython(blocks, variables);
     const blob = new Blob([code], { type: 'text/x-python' });
@@ -176,23 +193,28 @@ export default function App() {
 
   const handleRun = useCallback(async () => {
     const code = generatePython(blocks, variables);
+    setRunning(true);
+    setRunResult(null);
     try {
-      await navigator.clipboard.writeText(code);
+      const res = await fetch('/api/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      setRunResult(await res.json());
     } catch {
-      // Fallback: download the file
-      const blob = new Blob([code], { type: 'text/x-python' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `${fileName.trim() || 'untitled'}.py`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setRunResult({ stdout: '', stderr: 'Could not reach the backend.', returncode: 1 });
+    } finally {
+      setRunning(false);
     }
-    setRunState('done');
-    setTimeout(() => setRunState('idle'), 2000);
-  }, [blocks, variables, fileName]);
+  }, [blocks, variables]);
+
+  const handleCopy = useCallback(async () => {
+    const code = generatePython(blocks, variables);
+    try { await navigator.clipboard.writeText(code); } catch { /* ignore */ }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [blocks, variables]);
 
   // ── Drag sensors ─────────────────────────────────────────────────────────
   const sensors = useSensors(
@@ -388,19 +410,28 @@ export default function App() {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Run */}
-        <button
-          onClick={handleRun}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-shrink-0 ${
-            runState === 'done'
-              ? 'bg-emerald-600 text-white'
-              : 'bg-blue-600 hover:bg-blue-500 text-white'
-          }`}
-          title="Copy code to clipboard"
-        >
-          <Play size={11} className={runState === 'done' ? 'hidden' : ''} />
-          <span>{runState === 'done' ? 'Copied!' : 'Run'}</span>
-        </button>
+        {/* Run or Copy — depends on backend availability */}
+        {backendAvailable ? (
+          <button
+            onClick={handleRun}
+            disabled={running}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-all flex-shrink-0"
+            title="Run script via local backend"
+          >
+            <Play size={11} />
+            <span>{running ? 'Running…' : 'Run'}</span>
+          </button>
+        ) : (
+          <button
+            onClick={handleCopy}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-shrink-0 ${
+              copied ? 'bg-emerald-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'
+            }`}
+            title="Copy generated code to clipboard"
+          >
+            <span>{copied ? 'Copied!' : 'Copy'}</span>
+          </button>
+        )}
       </header>
     );
   }
@@ -442,14 +473,17 @@ export default function App() {
                 className="w-8 h-8 flex items-center justify-center rounded-xl text-white/50 disabled:opacity-25 active:bg-white/10">
                 <Redo2 size={15} />
               </button>
-              <button
-                onClick={handleRun}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold ${
-                  runState === 'done' ? 'bg-emerald-600' : 'bg-blue-600'
-                } text-white`}
-              >
-                {runState === 'done' ? 'Copied!' : 'Run'}
-              </button>
+              {backendAvailable ? (
+                <button onClick={handleRun} disabled={running}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 disabled:opacity-50 text-white">
+                  {running ? 'Running…' : 'Run'}
+                </button>
+              ) : (
+                <button onClick={handleCopy}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold ${copied ? 'bg-emerald-600' : 'bg-gray-700'} text-white`}>
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              )}
             </div>
           </header>
 
@@ -552,6 +586,30 @@ export default function App() {
             </div>
           )}
         </div>
+
+        {/* Run result panel */}
+        {runResult !== null && (
+          <div className="flex-shrink-0 border-t border-gray-700 bg-gray-900 max-h-48 overflow-y-auto">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border-b border-gray-700 sticky top-0">
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${runResult.returncode === 0 ? 'bg-emerald-400' : 'bg-red-400'}`} />
+              <span className="text-xs text-gray-400 flex-1">
+                {runResult.returncode === 0 ? 'Exited successfully' : `Exited with code ${runResult.returncode}`}
+              </span>
+              <button onClick={() => setRunResult(null)} className="text-gray-600 hover:text-gray-400 ml-auto">
+                <X size={14} />
+              </button>
+            </div>
+            {runResult.stdout && (
+              <pre className="px-3 py-2 text-xs text-emerald-300 font-mono whitespace-pre-wrap leading-5">{runResult.stdout}</pre>
+            )}
+            {runResult.stderr && (
+              <pre className="px-3 py-2 text-xs text-red-300 font-mono whitespace-pre-wrap leading-5">{runResult.stderr}</pre>
+            )}
+            {!runResult.stdout && !runResult.stderr && (
+              <p className="px-3 py-2 text-xs text-gray-500 italic">No output</p>
+            )}
+          </div>
+        )}
       </div>
 
       {dragOverlayContent}

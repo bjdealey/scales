@@ -33,21 +33,15 @@ export default function Canvas({ paletteDragId, paletteInsertIndex, paletteBlock
   const isPaletteDragging = !!paletteDragId && paletteBlockType != null;
 
   return (
-    <main className="flex-1 overflow-y-auto bg-gray-950 flex flex-col">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] flex-shrink-0">
-        <div>
-          <p className="text-sm font-semibold text-white/70">Canvas</p>
-          <p className="text-xs text-white/30">{blocks.length} action{blocks.length !== 1 ? 's' : ''}</p>
-        </div>
-        {blocks.length > 0 && (
-          <button
-            onClick={clearAll}
-            className="text-xs text-white/30 hover:text-red-400 transition-colors px-2 py-1 rounded-xl hover:bg-red-400/10"
-          >
-            Clear all
-          </button>
-        )}
-      </div>
+    <main className="flex-1 overflow-y-auto bg-gray-950 flex flex-col relative">
+      {blocks.length > 0 && (
+        <button
+          onClick={clearAll}
+          className="absolute top-3 right-3 z-10 text-xs text-white/20 hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-red-400/10"
+        >
+          Clear all
+        </button>
+      )}
 
       <div className="flex-1 p-6">
         {blocks.length === 0 ? (
