@@ -1,5 +1,6 @@
-import { useRef, useState, useCallback } from 'react';
-import { Zap, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FileCode2, Layers, LayoutDashboard, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import BlockPalette from './components/BlockPalette';
 import Canvas from './components/Canvas';
 import CodePreview from './components/CodePreview';
@@ -11,6 +12,17 @@ const RIGHT_MAX = 700;
 const LEFT_DEFAULT = 240;
 const RIGHT_DEFAULT = 480;
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isMobile;
+}
+
 function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
   return (
     <div
@@ -21,15 +33,26 @@ function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
   );
 }
 
+type MobileTab = 'palette' | 'canvas' | 'code';
+
+const MOBILE_TABS: { id: MobileTab; label: string; Icon: LucideIcon }[] = [
+  { id: 'palette', label: 'Palette', Icon: Layers },
+  { id: 'canvas',  label: 'Build',   Icon: LayoutDashboard },
+  { id: 'code',    label: 'Code',    Icon: FileCode2 },
+];
+
 export default function App() {
-  const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT);
+  const isMobile = useIsMobile();
+  const [mobileTab, setMobileTab] = useState<MobileTab>('canvas');
+
+  const [leftWidth, setLeftWidth]   = useState(LEFT_DEFAULT);
   const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT);
-  const [leftVisible, setLeftVisible] = useState(true);
+  const [leftVisible, setLeftVisible]   = useState(true);
   const [rightVisible, setRightVisible] = useState(true);
 
-  const leftWidthRef = useRef(leftWidth);
+  const leftWidthRef  = useRef(leftWidth);
   const rightWidthRef = useRef(rightWidth);
-  leftWidthRef.current = leftWidth;
+  leftWidthRef.current  = leftWidth;
   rightWidthRef.current = rightWidth;
 
   const startLeftResize = useCallback((e: React.MouseEvent) => {
@@ -62,6 +85,45 @@ export default function App() {
     document.addEventListener('mouseup', onUp);
   }, []);
 
+  /* ── Mobile layout ── */
+  if (isMobile) {
+    return (
+      <div className="h-screen flex flex-col bg-gray-950 text-white overflow-hidden select-none">
+        <header className="h-11 bg-gray-900 border-b border-gray-700 flex items-center justify-center gap-2 flex-shrink-0">
+          <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center flex-shrink-0">
+            <Zap size={12} className="text-white" />
+          </div>
+          <h1 className="font-bold text-sm text-white">Scales</h1>
+        </header>
+
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {mobileTab === 'palette' && <BlockPalette />}
+          {mobileTab === 'canvas'  && <Canvas />}
+          {mobileTab === 'code'    && <CodePreview />}
+        </div>
+
+        <nav
+          className="flex-shrink-0 bg-gray-900 border-t border-gray-700 flex"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          {MOBILE_TABS.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              onClick={() => setMobileTab(id)}
+              className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+                mobileTab === id ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              <Icon size={20} />
+              <span className="text-xs">{label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
+    );
+  }
+
+  /* ── Desktop layout ── */
   return (
     <div className="h-screen flex flex-col bg-gray-950 text-white overflow-hidden select-none">
       <header className="h-11 bg-gray-900 border-b border-gray-700 flex items-center px-3 gap-2 flex-shrink-0">
