@@ -23,7 +23,7 @@ export default function Canvas() {
         )}
       </div>
 
-      <div className="flex-1 p-4">
+      <div className="flex-1 p-6">
         {blocks.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center">
             <div
@@ -38,7 +38,7 @@ export default function Canvas() {
             </p>
           </div>
         ) : (
-          <div className="max-w-2xl">
+          <div className="w-full max-w-3xl mx-auto">
             {blocks.map((block, i) => (
               <div key={block.id}>
                 <BlockNode block={block} />
