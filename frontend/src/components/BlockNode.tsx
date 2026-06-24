@@ -456,7 +456,7 @@ export function InsertBlockMenu({ index, parentId, inElse }: { index: number; pa
               close();
             }
           }}
-          placeholder="Insert action..."
+          placeholder="+ Add action"
           className="w-full bg-white/[0.08] border border-white/10 rounded-xl px-2 py-1 text-xs text-white placeholder-white/25 focus:outline-none font-mono"
           spellCheck={false}
         />
