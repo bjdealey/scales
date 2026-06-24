@@ -418,44 +418,55 @@ function OutputVarField({
 
 function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolean }) {
   const [open, setOpen] = useState(false);
-  const addBlock = useBlockStore((s) => s.addBlock);
+  const addBlock    = useBlockStore((s) => s.addBlock);
+  const anchorRef   = useRef<HTMLDivElement>(null);
+  const contentRef  = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!anchorRef.current?.contains(t) && !contentRef.current?.contains(t))
+        setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
 
   return (
-    <div className="mt-1.5">
-      {!open ? (
-        <button
-          onClick={() => setOpen(true)}
-          className="w-full text-xs text-white/25 hover:text-white/60 border border-dashed border-white/15 hover:border-white/30 rounded-xl px-2 py-1 transition-colors text-left"
-        >
-          + Add scale{inElse ? ' (else)' : ''}
-        </button>
-      ) : (
-        <div
-          className="rounded-2xl p-2 backdrop-blur-sm"
-          style={{ border: '1px solid rgba(255,255,255,0.10)', background: 'rgba(3,7,18,0.85)' }}
-        >
-          <div className="flex flex-wrap gap-1 mb-2">
+    <div ref={anchorRef} className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`w-full text-xs border border-dashed rounded-xl px-2 py-1 transition-colors text-left ${
+          open
+            ? 'text-white/60 border-white/30'
+            : 'text-white/25 hover:text-white/60 border-white/15 hover:border-white/30'
+        }`}
+      >
+        + Add action{inElse ? ' (else)' : ''}
+      </button>
+
+      <DropdownPortal anchorRef={anchorRef} contentRef={contentRef} open={open}>
+        <div className="rounded-xl overflow-hidden" style={DROPDOWN_STYLE}>
+          <div className="py-1">
             {BLOCK_TYPES.map((type) => {
               const meta = BLOCK_META[type];
               return (
                 <button
                   key={type}
+                  type="button"
                   onClick={() => { addBlock(type, parentId, inElse); setOpen(false); }}
-                  className={`${meta.color} text-white text-xs px-2 py-0.5 rounded-lg hover:opacity-80 transition-opacity`}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/[0.06] transition-colors"
                 >
-                  {meta.label}
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.color}`} />
+                  <span className="text-xs text-white">{meta.label}</span>
                 </button>
               );
             })}
           </div>
-          <button
-            onClick={() => setOpen(false)}
-            className="text-xs text-white/30 hover:text-white/60 transition-colors"
-          >
-            Cancel
-          </button>
         </div>
-      )}
+      </DropdownPortal>
     </div>
   );
 }
