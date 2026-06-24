@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Globe, Package, Repeat2, GitBranch, Terminal, FileOutput, type LucideIcon } from 'lucide-react';
+import { useDraggable } from '@dnd-kit/core';
 import { BlockType, BLOCK_META } from '../types';
 import { useBlockStore } from '../store/blockStore';
 import VariablesPanel from './VariablesPanel';
 
-const BLOCK_DESCRIPTIONS: Record<BlockType, string> = {
+export const BLOCK_DESCRIPTIONS: Record<BlockType, string> = {
   http_request: 'GET, POST, PUT, DELETE',
   set_variable: 'assign mid-flow',
   for_each: 'loop over a list',
@@ -13,7 +14,7 @@ const BLOCK_DESCRIPTIONS: Record<BlockType, string> = {
   file_write: 'write to a file',
 };
 
-const BLOCK_ICONS: Record<BlockType, LucideIcon> = {
+export const BLOCK_ICONS: Record<BlockType, LucideIcon> = {
   http_request: Globe,
   set_variable: Package,
   for_each: Repeat2,
@@ -38,9 +39,42 @@ const TAB_LABELS: Record<Tab, string> = {
   blocks: 'Actions',
 };
 
+function DraggablePaletteItem({ type }: { type: BlockType }) {
+  const addBlock = useBlockStore((s) => s.addBlock);
+  const meta = BLOCK_META[type];
+  const Icon = BLOCK_ICONS[type];
+
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `palette-${type}`,
+    data: { type: 'palette-action', blockType: type },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ opacity: isDragging ? 0.4 : 1 }}
+      {...attributes}
+      {...listeners}
+    >
+      <button
+        onClick={() => addBlock(type)}
+        className="w-full text-left rounded-2xl overflow-hidden transition-all duration-150"
+        style={{ border: '1px solid rgba(255,255,255,0.08)' }}
+      >
+        <div className={`${meta.color} px-3 py-2 flex items-center gap-2`}>
+          <Icon size={14} className="text-white flex-shrink-0" />
+          <span className="text-white text-xs font-semibold">{meta.label}</span>
+        </div>
+        <div style={{ background: 'rgba(255,255,255,0.04)' }} className="px-3 py-1.5">
+          <p className="text-white/35 text-xs">{BLOCK_DESCRIPTIONS[type]}</p>
+        </div>
+      </button>
+    </div>
+  );
+}
+
 export default function BlockPalette() {
   const [tab, setTab] = useState<Tab>('variables');
-  const addBlock = useBlockStore((s) => s.addBlock);
   const variableCount = useBlockStore((s) => s.variables.length);
 
   return (
@@ -81,28 +115,12 @@ export default function BlockPalette() {
       ) : (
         <>
           <div className="px-3 pb-2 flex-shrink-0">
-            <p className="text-xs text-white/25">Click an action to add it to your script</p>
+            <p className="text-xs text-white/25">Click or drag an action into your script</p>
           </div>
           <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2">
-            {BLOCK_TYPES.map((type) => {
-              const meta = BLOCK_META[type];
-              return (
-                <button
-                  key={type}
-                  onClick={() => addBlock(type)}
-                  className="w-full text-left rounded-2xl overflow-hidden transition-all duration-150"
-                  style={{ border: '1px solid rgba(255,255,255,0.08)' }}
-                >
-                  <div className={`${meta.color} px-3 py-2 flex items-center gap-2`}>
-                    {(() => { const Icon = BLOCK_ICONS[type]; return <Icon size={14} className="text-white flex-shrink-0" />; })()}
-                    <span className="text-white text-xs font-semibold">{meta.label}</span>
-                  </div>
-                  <div style={{ background: 'rgba(255,255,255,0.04)' }} className="px-3 py-1.5">
-                    <p className="text-white/35 text-xs">{BLOCK_DESCRIPTIONS[type]}</p>
-                  </div>
-                </button>
-              );
-            })}
+            {BLOCK_TYPES.map((type) => (
+              <DraggablePaletteItem key={type} type={type} />
+            ))}
           </div>
         </>
       )}

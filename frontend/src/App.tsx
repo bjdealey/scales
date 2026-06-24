@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
 import { FileCode2, Layers, LayoutDashboard, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import BlockPalette from './components/BlockPalette';
+import BlockPalette, { BLOCK_ICONS, BLOCK_DESCRIPTIONS } from './components/BlockPalette';
 import Canvas from './components/Canvas';
 import CodePreview from './components/CodePreview';
+import BlockNode from './components/BlockNode';
+import { useBlockStore } from './store/blockStore';
+import { Block, BlockType, BLOCK_META } from './types';
 
 const LEFT_MIN = 200;
 const LEFT_MAX = 560;
@@ -41,6 +54,39 @@ const MOBILE_TABS: { id: MobileTab; label: string; Icon: LucideIcon }[] = [
   { id: 'code',    label: 'Code',    Icon: FileCode2 },
 ];
 
+type ActiveItem =
+  | { kind: 'block'; block: Block }
+  | { kind: 'palette'; blockType: BlockType }
+  | null;
+
+function findBlockById(blocks: Block[], id: string): Block | null {
+  for (const b of blocks) {
+    if (b.id === id) return b;
+    const found = findBlockById(b.children, id) ?? findBlockById(b.elseChildren, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function PaletteGhost({ blockType }: { blockType: BlockType }) {
+  const meta = BLOCK_META[blockType];
+  const Icon = BLOCK_ICONS[blockType];
+  return (
+    <div
+      className="rounded-2xl overflow-hidden rotate-2 opacity-90 pointer-events-none"
+      style={{ border: '1px solid rgba(255,255,255,0.08)', width: 200 }}
+    >
+      <div className={`${meta.color} px-3 py-2 flex items-center gap-2`}>
+        <Icon size={14} className="text-white flex-shrink-0" />
+        <span className="text-white text-xs font-semibold">{meta.label}</span>
+      </div>
+      <div style={{ background: 'rgba(20,20,28,0.95)' }} className="px-3 py-1.5">
+        <p className="text-white/35 text-xs">{BLOCK_DESCRIPTIONS[blockType]}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const isMobile = useIsMobile();
   const [mobileTab, setMobileTab] = useState<MobileTab>('canvas');
@@ -54,6 +100,39 @@ export default function App() {
   const rightWidthRef = useRef(rightWidth);
   leftWidthRef.current  = leftWidth;
   rightWidthRef.current = rightWidth;
+
+  const blocks        = useBlockStore((s) => s.blocks);
+  const addBlock      = useBlockStore((s) => s.addBlock);
+  const reorderBlocks = useBlockStore((s) => s.reorderBlocks);
+
+  const [activeItem, setActiveItem] = useState<ActiveItem>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+
+  const handleDragStart = (e: DragStartEvent) => {
+    const data = e.active.data.current;
+    if (data?.type === 'palette-action') {
+      setActiveItem({ kind: 'palette', blockType: data.blockType as BlockType });
+    } else {
+      const block = findBlockById(blocks, e.active.id as string);
+      if (block) setActiveItem({ kind: 'block', block });
+    }
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    setActiveItem(null);
+    const { active, over } = e;
+    if (!over) return;
+
+    const data = active.data.current;
+    if (data?.type === 'palette-action') {
+      addBlock(data.blockType as BlockType);
+    } else if (active.id !== over.id) {
+      reorderBlocks(active.id as string, over.id as string);
+    }
+  };
 
   const startLeftResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -88,133 +167,165 @@ export default function App() {
   /* ── Mobile layout ── */
   if (isMobile) {
     return (
-      <div className="h-dvh flex flex-col bg-gray-950 text-white overflow-hidden select-none">
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="h-dvh flex flex-col bg-gray-950 text-white overflow-hidden select-none">
 
-        {/* Glass header */}
-        <header
-          className="flex-shrink-0 h-14 flex items-center justify-center gap-2.5 backdrop-blur-xl"
-          style={{
-            background: 'rgba(12,12,16,0.75)',
-            borderBottom: '1px solid rgba(255,255,255,0.07)',
-          }}
-        >
-          <div
-            className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)', boxShadow: '0 2px 12px rgba(99,102,241,0.5)' }}
-          >
-            <Zap size={14} className="text-white" />
-          </div>
-          <h1 className="font-semibold text-base tracking-tight text-white">Scales</h1>
-        </header>
-
-        {/* Content */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {mobileTab === 'palette' && <BlockPalette />}
-          {mobileTab === 'canvas'  && <Canvas />}
-          {mobileTab === 'code'    && <CodePreview />}
-        </div>
-
-        {/* Floating glass pill nav */}
-        <div
-          className="flex-shrink-0 flex justify-center px-6 pt-2"
-          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}
-        >
-          <nav
-            className="flex gap-1 p-1.5 backdrop-blur-2xl rounded-full"
+          {/* Glass header */}
+          <header
+            className="flex-shrink-0 h-14 flex items-center justify-center gap-2.5 backdrop-blur-xl"
             style={{
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              boxShadow: '0 16px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1)',
+              background: 'rgba(12,12,16,0.75)',
+              borderBottom: '1px solid rgba(255,255,255,0.07)',
             }}
           >
-            {MOBILE_TABS.map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                onClick={() => setMobileTab(id)}
-                className={`flex flex-col items-center gap-0.5 px-5 py-2 rounded-full transition-all duration-200 ${
-                  mobileTab === id ? 'text-white' : 'text-white/40'
-                }`}
-                style={mobileTab === id ? {
-                  background: 'rgba(255,255,255,0.18)',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2)',
-                } : undefined}
-              >
-                <Icon size={22} strokeWidth={mobileTab === id ? 2 : 1.5} />
-                <span className="text-[10px] font-medium tracking-wide">{label}</span>
-              </button>
-            ))}
-          </nav>
+            <div
+              className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)', boxShadow: '0 2px 12px rgba(99,102,241,0.5)' }}
+            >
+              <Zap size={14} className="text-white" />
+            </div>
+            <h1 className="font-semibold text-base tracking-tight text-white">Scales</h1>
+          </header>
+
+          {/* Content */}
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {mobileTab === 'palette' && <BlockPalette />}
+            {mobileTab === 'canvas'  && <Canvas />}
+            {mobileTab === 'code'    && <CodePreview />}
+          </div>
+
+          {/* Floating glass pill nav */}
+          <div
+            className="flex-shrink-0 flex justify-center px-6 pt-2"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}
+          >
+            <nav
+              className="flex gap-1 p-1.5 backdrop-blur-2xl rounded-full"
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                boxShadow: '0 16px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1)',
+              }}
+            >
+              {MOBILE_TABS.map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setMobileTab(id)}
+                  className={`flex flex-col items-center gap-0.5 px-5 py-2 rounded-full transition-all duration-200 ${
+                    mobileTab === id ? 'text-white' : 'text-white/40'
+                  }`}
+                  style={mobileTab === id ? {
+                    background: 'rgba(255,255,255,0.18)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2)',
+                  } : undefined}
+                >
+                  <Icon size={22} strokeWidth={mobileTab === id ? 2 : 1.5} />
+                  <span className="text-[10px] font-medium tracking-wide">{label}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+
         </div>
 
-      </div>
+        <DragOverlay dropAnimation={null}>
+          {activeItem?.kind === 'palette' && <PaletteGhost blockType={activeItem.blockType} />}
+          {activeItem?.kind === 'block' && (
+            <div className="rotate-1 opacity-95 pointer-events-none">
+              <BlockNode block={activeItem.block} />
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
     );
   }
 
   /* ── Desktop layout ── */
   return (
-    <div className="h-screen flex flex-col bg-gray-950 text-white overflow-hidden select-none">
-      <header className="h-11 bg-gray-900 border-b border-gray-700 flex items-center px-3 gap-2 flex-shrink-0">
-        <button
-          onClick={() => setLeftVisible((v) => !v)}
-          className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
-            leftVisible
-              ? 'text-gray-400 hover:text-white hover:bg-gray-700'
-              : 'text-blue-400 hover:text-blue-300 hover:bg-gray-700'
-          }`}
-          title={leftVisible ? 'Hide sidebar' : 'Show sidebar'}
-        >
-          {leftVisible ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
-          <span className="hidden sm:inline">{leftVisible ? 'Hide' : 'Sidebar'}</span>
-        </button>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="h-screen flex flex-col bg-gray-950 text-white overflow-hidden select-none">
+        <header className="h-11 bg-gray-900 border-b border-gray-700 flex items-center px-3 gap-2 flex-shrink-0">
+          <button
+            onClick={() => setLeftVisible((v) => !v)}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
+              leftVisible
+                ? 'text-gray-400 hover:text-white hover:bg-gray-700'
+                : 'text-blue-400 hover:text-blue-300 hover:bg-gray-700'
+            }`}
+            title={leftVisible ? 'Hide sidebar' : 'Show sidebar'}
+          >
+            {leftVisible ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
+            <span className="hidden sm:inline">{leftVisible ? 'Hide' : 'Sidebar'}</span>
+          </button>
 
-        <div className="flex items-center gap-2 flex-1 justify-center">
-          <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center flex-shrink-0">
-            <Zap size={12} className="text-white" />
+          <div className="flex items-center gap-2 flex-1 justify-center">
+            <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center flex-shrink-0">
+              <Zap size={12} className="text-white" />
+            </div>
+            <h1 className="font-bold text-sm text-white">Scales</h1>
           </div>
-          <h1 className="font-bold text-sm text-white">Scales</h1>
+
+          <button
+            onClick={() => setRightVisible((v) => !v)}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
+              rightVisible
+                ? 'text-gray-400 hover:text-white hover:bg-gray-700'
+                : 'text-blue-400 hover:text-blue-300 hover:bg-gray-700'
+            }`}
+            title={rightVisible ? 'Hide code panel' : 'Show code panel'}
+          >
+            <span className="hidden sm:inline">Code</span>
+            {rightVisible ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
+          </button>
+        </header>
+
+        <div className="flex flex-1 overflow-hidden">
+          {leftVisible && (
+            <>
+              <div
+                className="flex-shrink-0 border-r border-gray-700 overflow-hidden"
+                style={{ width: leftWidth }}
+              >
+                <BlockPalette />
+              </div>
+              <ResizeHandle onMouseDown={startLeftResize} />
+            </>
+          )}
+
+          <Canvas />
+
+          {rightVisible && (
+            <>
+              <ResizeHandle onMouseDown={startRightResize} />
+              <div
+                className="flex-shrink-0 border-l border-gray-700 overflow-hidden"
+                style={{ width: rightWidth }}
+              >
+                <CodePreview />
+              </div>
+            </>
+          )}
         </div>
-
-        <button
-          onClick={() => setRightVisible((v) => !v)}
-          className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
-            rightVisible
-              ? 'text-gray-400 hover:text-white hover:bg-gray-700'
-              : 'text-blue-400 hover:text-blue-300 hover:bg-gray-700'
-          }`}
-          title={rightVisible ? 'Hide code panel' : 'Show code panel'}
-        >
-          <span className="hidden sm:inline">Code</span>
-          {rightVisible ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
-        </button>
-      </header>
-
-      <div className="flex flex-1 overflow-hidden">
-        {leftVisible && (
-          <>
-            <div
-              className="flex-shrink-0 border-r border-gray-700 overflow-hidden"
-              style={{ width: leftWidth }}
-            >
-              <BlockPalette />
-            </div>
-            <ResizeHandle onMouseDown={startLeftResize} />
-          </>
-        )}
-
-        <Canvas />
-
-        {rightVisible && (
-          <>
-            <ResizeHandle onMouseDown={startRightResize} />
-            <div
-              className="flex-shrink-0 border-l border-gray-700 overflow-hidden"
-              style={{ width: rightWidth }}
-            >
-              <CodePreview />
-            </div>
-          </>
-        )}
       </div>
-    </div>
+
+      <DragOverlay dropAnimation={null}>
+        {activeItem?.kind === 'palette' && <PaletteGhost blockType={activeItem.blockType} />}
+        {activeItem?.kind === 'block' && (
+          <div className="rotate-1 opacity-95 pointer-events-none">
+            <BlockNode block={activeItem.block} />
+          </div>
+        )}
+      </DragOverlay>
+    </DndContext>
   );
 }

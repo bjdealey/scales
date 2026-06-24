@@ -772,6 +772,7 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
+    data: { type: 'block' },
   });
 
   const style: React.CSSProperties = {

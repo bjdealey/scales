@@ -11,6 +11,7 @@ interface BlockStore {
   addBlock: (type: BlockType, parentId?: string, inElse?: boolean) => void;
   insertBlock: (type: BlockType, index: number, parentId?: string, inElse?: boolean) => void;
   reorderBlocks: (activeId: string, overId: string) => void;
+  reorderVariables: (activeId: string, overId: string) => void;
   removeBlock: (id: string) => void;
   updateBlock: (id: string, params: Record<string, string>) => void;
   moveBlock: (id: string, direction: 'up' | 'down') => void;
@@ -398,6 +399,16 @@ export const useBlockStore = create<BlockStore>()(
         const swap = direction === 'up' ? index - 1 : index + 1;
         if (swap >= 0 && swap < v.entries.length)
           [v.entries[index], v.entries[swap]] = [v.entries[swap], v.entries[index]];
+      });
+    },
+
+    reorderVariables: (activeId, overId) => {
+      set((state) => {
+        const a = state.variables.findIndex((v) => v.id === activeId);
+        const o = state.variables.findIndex((v) => v.id === overId);
+        if (a === -1 || o === -1 || a === o) return;
+        const [moved] = state.variables.splice(a, 1);
+        state.variables.splice(o, 0, moved);
       });
     },
 
