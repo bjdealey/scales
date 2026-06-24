@@ -1,10 +1,36 @@
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useBlockStore } from '../store/blockStore';
+import { BlockType, BLOCK_META } from '../types';
 import BlockNode, { InsertBlockMenu, AddBlockMenu } from './BlockNode';
 
-export default function Canvas() {
+function PaletteInsertIndicator({ blockType }: { blockType: BlockType }) {
+  const meta = BLOCK_META[blockType];
+  return (
+    <div className="py-1 px-1">
+      <div
+        className={`border-2 border-dashed ${meta.borderColor} rounded-2xl flex items-center justify-center py-3 opacity-60`}
+      >
+        <span className="text-white/50 text-xs font-medium">Drop {meta.label} here</span>
+      </div>
+    </div>
+  );
+}
+
+interface CanvasProps {
+  paletteDragId?: string | null;
+  paletteInsertIndex?: number | null;
+  paletteBlockType?: BlockType | null;
+}
+
+export default function Canvas({ paletteDragId, paletteInsertIndex, paletteBlockType }: CanvasProps) {
   const blocks   = useBlockStore((s) => s.blocks);
   const clearAll = useBlockStore((s) => s.clearAll);
+
+  // Include the palette draggable ID at the end so blocks animate around it
+  const sortableIds = blocks.map((b) => b.id);
+  if (paletteDragId) sortableIds.push(paletteDragId);
+
+  const isPaletteDragging = !!paletteDragId && paletteBlockType != null;
 
   return (
     <main className="flex-1 overflow-y-auto bg-gray-950 flex flex-col">
@@ -26,20 +52,38 @@ export default function Canvas() {
       <div className="flex-1 p-6">
         {blocks.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center">
-            <div className="w-full max-w-xs">
-              <AddBlockMenu />
-              <p className="text-white/25 text-xs text-center mt-3">
-                Your Python script assembles here as you add actions
-              </p>
-            </div>
+            {isPaletteDragging ? (
+              <div className="w-full max-w-3xl">
+                <PaletteInsertIndicator blockType={paletteBlockType!} />
+              </div>
+            ) : (
+              <div className="w-full max-w-xs">
+                <AddBlockMenu />
+                <p className="text-white/25 text-xs text-center mt-3">
+                  Your Python script assembles here as you add actions
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="w-full max-w-3xl mx-auto">
-            <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+              {/* Insert indicator at top */}
+              {isPaletteDragging && paletteInsertIndex === 0 && (
+                <PaletteInsertIndicator blockType={paletteBlockType!} />
+              )}
+
               {blocks.map((block, i) => (
                 <div key={block.id}>
                   <BlockNode block={block} />
-                  <InsertBlockMenu index={i + 1} />
+
+                  {/* After each block: either the palette insert indicator or the normal insert menu */}
+                  {isPaletteDragging
+                    ? paletteInsertIndex === i + 1
+                      ? <PaletteInsertIndicator blockType={paletteBlockType!} />
+                      : <div className="h-2" />
+                    : <InsertBlockMenu index={i + 1} />
+                  }
                 </div>
               ))}
             </SortableContext>

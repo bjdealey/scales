@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   DndContext,
+  DragCancelEvent,
   DragEndEvent,
+  DragMoveEvent,
   DragOverlay,
   DragStartEvent,
   PointerSensor,
@@ -103,9 +105,20 @@ export default function App() {
 
   const blocks        = useBlockStore((s) => s.blocks);
   const addBlock      = useBlockStore((s) => s.addBlock);
+  const insertBlock   = useBlockStore((s) => s.insertBlock);
   const reorderBlocks = useBlockStore((s) => s.reorderBlocks);
 
-  const [activeItem, setActiveItem] = useState<ActiveItem>(null);
+  const [activeItem, setActiveItem]             = useState<ActiveItem>(null);
+  const [paletteDragId, setPaletteDragId]       = useState<string | null>(null);
+  const [paletteTargetIdx, setPaletteTargetIdx] = useState<number | null>(null);
+  const pointerYRef = useRef(0);
+
+  // Track pointer Y for before/after determination in onDragMove
+  useEffect(() => {
+    const track = (e: PointerEvent) => { pointerYRef.current = e.clientY; };
+    window.addEventListener('pointermove', track, true);
+    return () => window.removeEventListener('pointermove', track, true);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -114,6 +127,8 @@ export default function App() {
   const handleDragStart = (e: DragStartEvent) => {
     const data = e.active.data.current;
     if (data?.type === 'palette-action') {
+      setPaletteDragId(e.active.id as string);
+      setPaletteTargetIdx(blocks.length);
       setActiveItem({ kind: 'palette', blockType: data.blockType as BlockType });
     } else {
       const block = findBlockById(blocks, e.active.id as string);
@@ -121,17 +136,43 @@ export default function App() {
     }
   };
 
-  const handleDragEnd = (e: DragEndEvent) => {
-    setActiveItem(null);
-    const { active, over } = e;
-    if (!over) return;
+  const handleDragMove = (e: DragMoveEvent) => {
+    if (e.active.data.current?.type !== 'palette-action') return;
+    const { over } = e;
+    if (!over) { setPaletteTargetIdx(blocks.length); return; }
+    const overIdx = blocks.findIndex((b) => b.id === over.id);
+    if (overIdx === -1) { setPaletteTargetIdx(blocks.length); return; }
+    const blockMidY = over.rect.top + over.rect.height / 2;
+    setPaletteTargetIdx(pointerYRef.current < blockMidY ? overIdx : overIdx + 1);
+  };
 
+  const clearPaletteDrag = () => {
+    setPaletteDragId(null);
+    setPaletteTargetIdx(null);
+    setActiveItem(null);
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
     const data = active.data.current;
     if (data?.type === 'palette-action') {
-      addBlock(data.blockType as BlockType);
-    } else if (active.id !== over.id) {
-      reorderBlocks(active.id as string, over.id as string);
+      const idx = paletteTargetIdx ?? blocks.length;
+      clearPaletteDrag();
+      if (over) {
+        insertBlock(data.blockType as BlockType, idx);
+      } else {
+        addBlock(data.blockType as BlockType);
+      }
+    } else {
+      setActiveItem(null);
+      if (over && active.id !== over.id) {
+        reorderBlocks(active.id as string, over.id as string);
+      }
     }
+  };
+
+  const handleDragCancel = (_e: DragCancelEvent) => {
+    clearPaletteDrag();
   };
 
   const startLeftResize = useCallback((e: React.MouseEvent) => {
@@ -164,6 +205,8 @@ export default function App() {
     document.addEventListener('mouseup', onUp);
   }, []);
 
+  const paletteBlockType = activeItem?.kind === 'palette' ? activeItem.blockType : null;
+
   /* ── Mobile layout ── */
   if (isMobile) {
     return (
@@ -171,7 +214,9 @@ export default function App() {
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
       >
         <div className="h-dvh flex flex-col bg-gray-950 text-white overflow-hidden select-none">
 
@@ -195,7 +240,13 @@ export default function App() {
           {/* Content */}
           <div className="flex-1 overflow-hidden flex flex-col">
             {mobileTab === 'palette' && <BlockPalette />}
-            {mobileTab === 'canvas'  && <Canvas />}
+            {mobileTab === 'canvas'  && (
+              <Canvas
+                paletteDragId={paletteDragId}
+                paletteInsertIndex={paletteTargetIdx}
+                paletteBlockType={paletteBlockType}
+              />
+            )}
             {mobileTab === 'code'    && <CodePreview />}
           </div>
 
@@ -251,7 +302,9 @@ export default function App() {
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
     >
       <div className="h-screen flex flex-col bg-gray-950 text-white overflow-hidden select-none">
         <header className="h-11 bg-gray-900 border-b border-gray-700 flex items-center px-3 gap-2 flex-shrink-0">
@@ -302,7 +355,11 @@ export default function App() {
             </>
           )}
 
-          <Canvas />
+          <Canvas
+              paletteDragId={paletteDragId}
+              paletteInsertIndex={paletteTargetIdx}
+              paletteBlockType={paletteBlockType}
+            />
 
           {rightVisible && (
             <>
