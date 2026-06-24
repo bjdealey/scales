@@ -11,7 +11,18 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { FileCode2, Layers, LayoutDashboard, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Zap } from 'lucide-react';
+import {
+  Columns2,
+  Download,
+  FileCode2,
+  FilePen,
+  LayoutDashboard,
+  Layers,
+  Play,
+  Redo2,
+  Undo2,
+  Zap,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import BlockPalette, { BLOCK_ICONS, BLOCK_DESCRIPTIONS } from './components/BlockPalette';
 import Canvas from './components/Canvas';
@@ -19,6 +30,7 @@ import CodePreview from './components/CodePreview';
 import BlockNode from './components/BlockNode';
 import { useBlockStore } from './store/blockStore';
 import { Block, BlockType, BLOCK_META } from './types';
+import { generatePython } from './codegen/generator';
 
 const LEFT_MIN = 200;
 const LEFT_MAX = 560;
@@ -26,6 +38,14 @@ const RIGHT_MIN = 300;
 const RIGHT_MAX = 700;
 const LEFT_DEFAULT = 240;
 const RIGHT_DEFAULT = 480;
+
+type ViewMode = 'blocks' | 'split' | 'code';
+
+const VIEW_OPTIONS: { mode: ViewMode; label: string; Icon: LucideIcon }[] = [
+  { mode: 'blocks', label: 'Blocks', Icon: LayoutDashboard },
+  { mode: 'split',  label: 'Split',  Icon: Columns2 },
+  { mode: 'code',   label: 'Code',   Icon: FileCode2 },
+];
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
@@ -92,11 +112,14 @@ function PaletteGhost({ blockType }: { blockType: BlockType }) {
 export default function App() {
   const isMobile = useIsMobile();
   const [mobileTab, setMobileTab] = useState<MobileTab>('canvas');
+  const [viewMode, setViewMode]   = useState<ViewMode>('split');
+
+  const [fileName, setFileName]         = useState('Untitled');
+  const [editingName, setEditingName]   = useState(false);
+  const [runState, setRunState]         = useState<'idle' | 'done'>('idle');
 
   const [leftWidth, setLeftWidth]   = useState(LEFT_DEFAULT);
   const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT);
-  const [leftVisible, setLeftVisible]   = useState(true);
-  const [rightVisible, setRightVisible] = useState(true);
 
   const leftWidthRef  = useRef(leftWidth);
   const rightWidthRef = useRef(rightWidth);
@@ -104,22 +127,74 @@ export default function App() {
   rightWidthRef.current = rightWidth;
 
   const blocks        = useBlockStore((s) => s.blocks);
+  const variables     = useBlockStore((s) => s.variables);
   const addBlock      = useBlockStore((s) => s.addBlock);
   const insertBlock   = useBlockStore((s) => s.insertBlock);
   const reorderBlocks = useBlockStore((s) => s.reorderBlocks);
+  const undo          = useBlockStore((s) => s.undo);
+  const redo          = useBlockStore((s) => s.redo);
+  const canUndo       = useBlockStore((s) => s._past.length > 0);
+  const canRedo       = useBlockStore((s) => s._future.length > 0);
 
+  // ── Drag state ───────────────────────────────────────────────────────────
   const [activeItem, setActiveItem]             = useState<ActiveItem>(null);
   const [paletteDragId, setPaletteDragId]       = useState<string | null>(null);
   const [paletteTargetIdx, setPaletteTargetIdx] = useState<number | null>(null);
   const pointerYRef = useRef(0);
 
-  // Track pointer Y for before/after determination in onDragMove
   useEffect(() => {
     const track = (e: PointerEvent) => { pointerYRef.current = e.clientY; };
     window.addEventListener('pointermove', track, true);
     return () => window.removeEventListener('pointermove', track, true);
   }, []);
 
+  // ── Keyboard shortcuts ───────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey) {
+        if (e.key === 'z' && !e.shiftKey) { undo(); e.preventDefault(); }
+        if ((e.key === 'z' && e.shiftKey) || e.key === 'y') { redo(); e.preventDefault(); }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo, redo]);
+
+  // ── Export / Run ─────────────────────────────────────────────────────────
+  const handleExport = useCallback(() => {
+    const code = generatePython(blocks, variables);
+    const blob = new Blob([code], { type: 'text/x-python' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${fileName.trim() || 'untitled'}.py`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [blocks, variables, fileName]);
+
+  const handleRun = useCallback(async () => {
+    const code = generatePython(blocks, variables);
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch {
+      // Fallback: download the file
+      const blob = new Blob([code], { type: 'text/x-python' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `${fileName.trim() || 'untitled'}.py`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    setRunState('done');
+    setTimeout(() => setRunState('idle'), 2000);
+  }, [blocks, variables, fileName]);
+
+  // ── Drag sensors ─────────────────────────────────────────────────────────
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
@@ -171,10 +246,9 @@ export default function App() {
     }
   };
 
-  const handleDragCancel = (_e: DragCancelEvent) => {
-    clearPaletteDrag();
-  };
+  const handleDragCancel = (_e: DragCancelEvent) => clearPaletteDrag();
 
+  // ── Resize ───────────────────────────────────────────────────────────────
   const startLeftResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -207,6 +281,130 @@ export default function App() {
 
   const paletteBlockType = activeItem?.kind === 'palette' ? activeItem.blockType : null;
 
+  // ── Shared DragOverlay content ────────────────────────────────────────────
+  const dragOverlayContent = (
+    <DragOverlay dropAnimation={null}>
+      {activeItem?.kind === 'palette' && <PaletteGhost blockType={activeItem.blockType} />}
+      {activeItem?.kind === 'block' && (
+        <div className="rotate-1 opacity-95 pointer-events-none">
+          <BlockNode block={activeItem.block} />
+        </div>
+      )}
+    </DragOverlay>
+  );
+
+  // ── Shared header ─────────────────────────────────────────────────────────
+  function DesktopHeader() {
+    return (
+      <header className="h-11 bg-gray-900 border-b border-gray-700 flex items-center px-3 gap-2 flex-shrink-0 min-w-0">
+
+        {/* Logo + file name */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center flex-shrink-0">
+            <Zap size={11} className="text-white" />
+          </div>
+          {editingName ? (
+            <input
+              autoFocus
+              value={fileName}
+              onChange={(e) => setFileName(e.target.value)}
+              onBlur={() => setEditingName(false)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setEditingName(false); }}
+              className="bg-transparent text-white text-sm font-medium outline-none border-b border-white/40 w-28 pb-px"
+              spellCheck={false}
+            />
+          ) : (
+            <button
+              onClick={() => setEditingName(true)}
+              className="flex items-center gap-1 text-sm font-medium text-white/80 hover:text-white transition-colors group"
+              title="Rename"
+            >
+              <span>{fileName || 'Untitled'}</span>
+              <FilePen size={11} className="text-white/30 group-hover:text-white/60 transition-colors" />
+            </button>
+          )}
+        </div>
+
+        {/* Export */}
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-white/60 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+          title="Download .py file"
+        >
+          <Download size={13} />
+          <span className="hidden sm:inline">Export</span>
+        </button>
+
+        {/* Divider */}
+        <div className="w-px h-5 bg-white/10 flex-shrink-0" />
+
+        {/* View mode segmented control */}
+        <div
+          className="flex p-0.5 rounded-lg flex-shrink-0"
+          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          {VIEW_OPTIONS.map(({ mode, label, Icon }) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] text-xs font-medium transition-all duration-150 ${
+                viewMode === mode ? 'text-white' : 'text-white/40 hover:text-white/60'
+              }`}
+              style={viewMode === mode ? {
+                background: 'rgba(255,255,255,0.15)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)',
+              } : undefined}
+              title={label}
+            >
+              <Icon size={12} />
+              <span className="hidden md:inline">{label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Divider */}
+        <div className="w-px h-5 bg-white/10 flex-shrink-0" />
+
+        {/* Undo / Redo */}
+        <div className="flex gap-0.5 flex-shrink-0">
+          <button
+            onClick={undo}
+            disabled={!canUndo}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+            title="Undo (⌘Z)"
+          >
+            <Undo2 size={13} />
+          </button>
+          <button
+            onClick={redo}
+            disabled={!canRedo}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+            title="Redo (⌘⇧Z)"
+          >
+            <Redo2 size={13} />
+          </button>
+        </div>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Run */}
+        <button
+          onClick={handleRun}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-shrink-0 ${
+            runState === 'done'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-blue-600 hover:bg-blue-500 text-white'
+          }`}
+          title="Copy code to clipboard"
+        >
+          <Play size={11} className={runState === 'done' ? 'hidden' : ''} />
+          <span>{runState === 'done' ? 'Copied!' : 'Run'}</span>
+        </button>
+      </header>
+    );
+  }
+
   /* ── Mobile layout ── */
   if (isMobile) {
     return (
@@ -219,25 +417,42 @@ export default function App() {
         onDragCancel={handleDragCancel}
       >
         <div className="h-dvh flex flex-col bg-gray-950 text-white overflow-hidden select-none">
-
-          {/* Glass header */}
           <header
-            className="flex-shrink-0 h-14 flex items-center justify-center gap-2.5 backdrop-blur-xl"
+            className="flex-shrink-0 h-14 flex items-center justify-between px-4 backdrop-blur-xl"
             style={{
               background: 'rgba(12,12,16,0.75)',
               borderBottom: '1px solid rgba(255,255,255,0.07)',
             }}
           >
-            <div
-              className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)', boxShadow: '0 2px 12px rgba(99,102,241,0.5)' }}
-            >
-              <Zap size={14} className="text-white" />
+            <div className="flex items-center gap-2">
+              <div
+                className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)', boxShadow: '0 2px 12px rgba(99,102,241,0.5)' }}
+              >
+                <Zap size={14} className="text-white" />
+              </div>
+              <span className="font-semibold text-base tracking-tight">{fileName || 'Untitled'}</span>
             </div>
-            <h1 className="font-semibold text-base tracking-tight text-white">Scales</h1>
+            <div className="flex items-center gap-2">
+              <button onClick={undo} disabled={!canUndo}
+                className="w-8 h-8 flex items-center justify-center rounded-xl text-white/50 disabled:opacity-25 active:bg-white/10">
+                <Undo2 size={15} />
+              </button>
+              <button onClick={redo} disabled={!canRedo}
+                className="w-8 h-8 flex items-center justify-center rounded-xl text-white/50 disabled:opacity-25 active:bg-white/10">
+                <Redo2 size={15} />
+              </button>
+              <button
+                onClick={handleRun}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold ${
+                  runState === 'done' ? 'bg-emerald-600' : 'bg-blue-600'
+                } text-white`}
+              >
+                {runState === 'done' ? 'Copied!' : 'Run'}
+              </button>
+            </div>
           </header>
 
-          {/* Content */}
           <div className="flex-1 overflow-hidden flex flex-col">
             {mobileTab === 'palette' && <BlockPalette />}
             {mobileTab === 'canvas'  && (
@@ -250,7 +465,6 @@ export default function App() {
             {mobileTab === 'code'    && <CodePreview />}
           </div>
 
-          {/* Floating glass pill nav */}
           <div
             className="flex-shrink-0 flex justify-center px-6 pt-2"
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}
@@ -281,17 +495,9 @@ export default function App() {
               ))}
             </nav>
           </div>
-
         </div>
 
-        <DragOverlay dropAnimation={null}>
-          {activeItem?.kind === 'palette' && <PaletteGhost blockType={activeItem.blockType} />}
-          {activeItem?.kind === 'block' && (
-            <div className="rotate-1 opacity-95 pointer-events-none">
-              <BlockNode block={activeItem.block} />
-            </div>
-          )}
-        </DragOverlay>
+        {dragOverlayContent}
       </DndContext>
     );
   }
@@ -307,43 +513,11 @@ export default function App() {
       onDragCancel={handleDragCancel}
     >
       <div className="h-screen flex flex-col bg-gray-950 text-white overflow-hidden select-none">
-        <header className="h-11 bg-gray-900 border-b border-gray-700 flex items-center px-3 gap-2 flex-shrink-0">
-          <button
-            onClick={() => setLeftVisible((v) => !v)}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
-              leftVisible
-                ? 'text-gray-400 hover:text-white hover:bg-gray-700'
-                : 'text-blue-400 hover:text-blue-300 hover:bg-gray-700'
-            }`}
-            title={leftVisible ? 'Hide sidebar' : 'Show sidebar'}
-          >
-            {leftVisible ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
-            <span className="hidden sm:inline">{leftVisible ? 'Hide' : 'Sidebar'}</span>
-          </button>
-
-          <div className="flex items-center gap-2 flex-1 justify-center">
-            <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center flex-shrink-0">
-              <Zap size={12} className="text-white" />
-            </div>
-            <h1 className="font-bold text-sm text-white">Scales</h1>
-          </div>
-
-          <button
-            onClick={() => setRightVisible((v) => !v)}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
-              rightVisible
-                ? 'text-gray-400 hover:text-white hover:bg-gray-700'
-                : 'text-blue-400 hover:text-blue-300 hover:bg-gray-700'
-            }`}
-            title={rightVisible ? 'Hide code panel' : 'Show code panel'}
-          >
-            <span className="hidden sm:inline">Code</span>
-            {rightVisible ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
-          </button>
-        </header>
+        <DesktopHeader />
 
         <div className="flex flex-1 overflow-hidden">
-          {leftVisible && (
+          {/* Palette + Canvas — hidden in code-only mode */}
+          {viewMode !== 'code' && (
             <>
               <div
                 className="flex-shrink-0 border-r border-gray-700 overflow-hidden"
@@ -352,16 +526,16 @@ export default function App() {
                 <BlockPalette />
               </div>
               <ResizeHandle onMouseDown={startLeftResize} />
+              <Canvas
+                paletteDragId={paletteDragId}
+                paletteInsertIndex={paletteTargetIdx}
+                paletteBlockType={paletteBlockType}
+              />
             </>
           )}
 
-          <Canvas
-              paletteDragId={paletteDragId}
-              paletteInsertIndex={paletteTargetIdx}
-              paletteBlockType={paletteBlockType}
-            />
-
-          {rightVisible && (
+          {/* Code preview — split or code-only */}
+          {viewMode === 'split' && (
             <>
               <ResizeHandle onMouseDown={startRightResize} />
               <div
@@ -372,17 +546,15 @@ export default function App() {
               </div>
             </>
           )}
+          {viewMode === 'code' && (
+            <div className="flex-1 overflow-hidden">
+              <CodePreview />
+            </div>
+          )}
         </div>
       </div>
 
-      <DragOverlay dropAnimation={null}>
-        {activeItem?.kind === 'palette' && <PaletteGhost blockType={activeItem.blockType} />}
-        {activeItem?.kind === 'block' && (
-          <div className="rotate-1 opacity-95 pointer-events-none">
-            <BlockNode block={activeItem.block} />
-          </div>
-        )}
-      </DragOverlay>
+      {dragOverlayContent}
     </DndContext>
   );
 }

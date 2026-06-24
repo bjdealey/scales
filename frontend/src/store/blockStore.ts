@@ -3,11 +3,17 @@ import { immer } from 'zustand/middleware/immer';
 import { v4 as uuid } from 'uuid';
 import { Block, BlockType, BLOCK_DEFAULTS, Variable, PythonType, TYPE_DEFAULTS, DictEntry, ListItem, PRIMITIVE_DEFAULTS, SortMode } from '../types';
 
+type Snapshot = { blocks: Block[]; variables: Variable[] };
+
 interface BlockStore {
   blocks: Block[];
   variables: Variable[];
   variableSortMode: SortMode;
+  _past: Snapshot[];
+  _future: Snapshot[];
   setVariableSortMode: (mode: SortMode) => void;
+  undo: () => void;
+  redo: () => void;
   addBlock: (type: BlockType, parentId?: string, inElse?: boolean) => void;
   insertBlock: (type: BlockType, index: number, parentId?: string, inElse?: boolean) => void;
   reorderBlocks: (activeId: string, overId: string) => void;
@@ -30,6 +36,16 @@ interface BlockStore {
   updateDictEntry: (id: string, index: number, patch: Partial<DictEntry>) => void;
   removeDictEntry: (id: string, index: number) => void;
   moveDictEntry: (id: string, index: number, direction: 'up' | 'down') => void;
+}
+
+// Push current blocks+variables to history, clear future. Call at the start of any undoable set() callback.
+function snap(s: BlockStore) {
+  const entry: Snapshot = {
+    blocks: JSON.parse(JSON.stringify(s.blocks)),
+    variables: JSON.parse(JSON.stringify(s.variables)),
+  };
+  s._past = [...s._past, entry].slice(-50);
+  s._future = [];
 }
 
 // Converts Python literal syntax to JSON so we can parse it:
@@ -205,13 +221,38 @@ export const useBlockStore = create<BlockStore>()(
     blocks: [],
     variables: [],
     variableSortMode: 'custom',
+    _past: [],
+    _future: [],
 
     setVariableSortMode: (mode) => {
       set((state) => { state.variableSortMode = mode; });
     },
 
+    undo: () => {
+      set((state) => {
+        if (state._past.length === 0) return;
+        const prev = state._past[state._past.length - 1];
+        state._future = [{ blocks: JSON.parse(JSON.stringify(state.blocks)), variables: JSON.parse(JSON.stringify(state.variables)) }, ...state._future].slice(0, 50);
+        state._past = state._past.slice(0, -1);
+        state.blocks = prev.blocks;
+        state.variables = prev.variables;
+      });
+    },
+
+    redo: () => {
+      set((state) => {
+        if (state._future.length === 0) return;
+        const next = state._future[0];
+        state._past = [...state._past, { blocks: JSON.parse(JSON.stringify(state.blocks)), variables: JSON.parse(JSON.stringify(state.variables)) }].slice(-50);
+        state._future = state._future.slice(1);
+        state.blocks = next.blocks;
+        state.variables = next.variables;
+      });
+    },
+
     addBlock: (type, parentId, inElse = false) => {
       set((state) => {
+        snap(state);
         const newBlock = createBlock(type);
         if (!parentId) {
           state.blocks.push(newBlock);
@@ -223,6 +264,7 @@ export const useBlockStore = create<BlockStore>()(
 
     reorderBlocks: (activeId, overId) => {
       set((state) => {
+        snap(state);
         const a = findBlockCtx(state.blocks, activeId);
         const o = findBlockCtx(state.blocks, overId);
         if (!a || !o) return;
@@ -234,6 +276,7 @@ export const useBlockStore = create<BlockStore>()(
 
     insertBlock: (type, index, parentId, inElse = false) => {
       set((state) => {
+        snap(state);
         const newBlock = createBlock(type);
         if (!parentId) {
           state.blocks.splice(index, 0, newBlock);
@@ -245,6 +288,7 @@ export const useBlockStore = create<BlockStore>()(
 
     removeBlock: (id) => {
       set((state) => {
+        snap(state);
         findAndRemove(state.blocks, id);
       });
     },
@@ -257,18 +301,21 @@ export const useBlockStore = create<BlockStore>()(
 
     moveBlock: (id, direction) => {
       set((state) => {
+        snap(state);
         findAndMove(state.blocks, id, direction);
       });
     },
 
     clearAll: () => {
       set((state) => {
+        snap(state);
         state.blocks = [];
       });
     },
 
     addVariable: () => {
       set((state) => {
+        snap(state);
         state.variables.push({
           id: uuid(),
           name: '',
@@ -284,8 +331,8 @@ export const useBlockStore = create<BlockStore>()(
 
     addVariableWithName: (name: string, type: PythonType, initialValue?: string) => {
       set((state) => {
+        snap(state);
         const raw = initialValue ?? TYPE_DEFAULTS[type];
-        // Normalize bool casing; parse structured types into their item/entry arrays.
         const value   = type === 'bool' ? (/^false$/i.test(raw) ? 'False' : 'True') : (type === 'list' || type === 'dict' ? '' : raw);
         const items   = type === 'list' && initialValue ? parseListItems(initialValue) : [];
         const entries = type === 'dict' && initialValue ? parseDictEntries(initialValue) : [];
@@ -304,6 +351,7 @@ export const useBlockStore = create<BlockStore>()(
 
     removeVariable: (id) => {
       set((state) => {
+        snap(state);
         const idx = state.variables.findIndex((v) => v.id === id);
         if (idx === -1) return;
         const name = state.variables[idx].name.trim();
@@ -327,6 +375,7 @@ export const useBlockStore = create<BlockStore>()(
 
     toggleLock: (id) => {
       set((state) => {
+        snap(state);
         const v = state.variables.find((v) => v.id === id);
         if (v) v.locked = !v.locked;
       });
@@ -334,6 +383,7 @@ export const useBlockStore = create<BlockStore>()(
 
     addListItem: (id) => {
       set((state) => {
+        snap(state);
         const v = state.variables.find((v) => v.id === id);
         if (v) v.items.push({ type: 'str', value: '' });
       });
@@ -352,6 +402,7 @@ export const useBlockStore = create<BlockStore>()(
 
     removeListItem: (id, index) => {
       set((state) => {
+        snap(state);
         const v = state.variables.find((v) => v.id === id);
         if (v) v.items.splice(index, 1);
       });
@@ -359,6 +410,7 @@ export const useBlockStore = create<BlockStore>()(
 
     moveListItem: (id, index, direction) => {
       set((state) => {
+        snap(state);
         const v = state.variables.find((v) => v.id === id);
         if (!v) return;
         const swap = direction === 'up' ? index - 1 : index + 1;
@@ -369,6 +421,7 @@ export const useBlockStore = create<BlockStore>()(
 
     addDictEntry: (id) => {
       set((state) => {
+        snap(state);
         const v = state.variables.find((v) => v.id === id);
         if (v) v.entries.push({ key: '', valueType: 'str', value: '' });
       });
@@ -387,6 +440,7 @@ export const useBlockStore = create<BlockStore>()(
 
     removeDictEntry: (id, index) => {
       set((state) => {
+        snap(state);
         const v = state.variables.find((v) => v.id === id);
         if (v) v.entries.splice(index, 1);
       });
@@ -394,6 +448,7 @@ export const useBlockStore = create<BlockStore>()(
 
     moveDictEntry: (id, index, direction) => {
       set((state) => {
+        snap(state);
         const v = state.variables.find((v) => v.id === id);
         if (!v) return;
         const swap = direction === 'up' ? index - 1 : index + 1;
@@ -404,6 +459,7 @@ export const useBlockStore = create<BlockStore>()(
 
     reorderVariables: (activeId, overId) => {
       set((state) => {
+        snap(state);
         const a = state.variables.findIndex((v) => v.id === activeId);
         const o = state.variables.findIndex((v) => v.id === overId);
         if (a === -1 || o === -1 || a === o) return;
@@ -414,6 +470,7 @@ export const useBlockStore = create<BlockStore>()(
 
     moveVariable: (id, direction) => {
       set((state) => {
+        snap(state);
         const idx = state.variables.findIndex((v) => v.id === id);
         if (idx === -1) return;
         const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
