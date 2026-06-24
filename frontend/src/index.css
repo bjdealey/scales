@@ -2,29 +2,110 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
-  box-sizing: border-box;
+/* ── Design tokens ─────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light dark;
+
+  /* Backgrounds */
+  --base:      #f2f2f7;
+  --elevated:  #ffffff;
+  --surface:   rgba(0,0,0,0.03);
+  --surface2:  rgba(0,0,0,0.055);
+
+  /* Borders */
+  --brd:       rgba(0,0,0,0.08);
+  --brd-med:   rgba(0,0,0,0.13);
+
+  /* Text */
+  --tx:        #1c1c1e;
+  --tx-2:      rgba(0,0,0,0.50);
+  --tx-3:      rgba(0,0,0,0.35);
+  --tx-4:      rgba(0,0,0,0.22);
+
+  /* Inputs */
+  --in-bg:     rgba(0,0,0,0.06);
+  --in-brd:    rgba(0,0,0,0.13);
+
+  /* Popups / dropdowns */
+  --popup:     rgba(252,252,254,0.98);
+  --popup-sh:  0 8px 28px rgba(0,0,0,0.13);
+
+  /* Canvas dot grid */
+  --grid:      rgba(0,0,0,0.07);
+
+  /* Selection ring */
+  --sel-ring:  rgba(0,0,0,0.25);
 }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --base:      #030712;
+    --elevated:  #111827;
+    --surface:   rgba(255,255,255,0.04);
+    --surface2:  rgba(255,255,255,0.07);
+
+    --brd:       rgba(255,255,255,0.07);
+    --brd-med:   rgba(255,255,255,0.12);
+
+    --tx:        #ffffff;
+    --tx-2:      rgba(255,255,255,0.45);
+    --tx-3:      rgba(255,255,255,0.28);
+    --tx-4:      rgba(255,255,255,0.18);
+
+    --in-bg:     rgba(255,255,255,0.08);
+    --in-brd:    rgba(255,255,255,0.10);
+
+    --popup:     rgba(3,7,18,0.97);
+    --popup-sh:  0 16px 32px rgba(0,0,0,0.70);
+
+    --grid:      rgba(255,255,255,0.055);
+
+    --sel-ring:  rgba(255,255,255,0.22);
+  }
+}
+
+/* ── Shared field styles (used via className="sk-input" etc.) ──────────────── */
+.sk-input {
+  background: var(--in-bg);
+  border: 1px solid var(--in-brd);
+  color: var(--tx);
+  outline: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.sk-input::placeholder { color: var(--tx-4); }
+.sk-input:focus         { border-color: rgba(96,165,250,0.70); }
+.sk-input:disabled      { opacity: 0.28; cursor: not-allowed; }
+
+.sk-select {
+  background: var(--in-bg);
+  border: 1px solid var(--in-brd);
+  color: var(--tx-2);
+  outline: none;
+  cursor: pointer;
+}
+.sk-select:focus    { border-color: rgba(96,165,250,0.70); }
+.sk-select:disabled { opacity: 0.28; cursor: not-allowed; }
+
+/* ── Canvas dot-grid background ────────────────────────────────────────────── */
+.canvas-grid {
+  background-color: var(--base);
+  background-image: radial-gradient(circle, var(--grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* ── Base ──────────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
-  background-color: #030712; /* gray-950 */
-  touch-action: pan-x pan-y; /* prevents pinch-zoom on iOS Safari */
+  background-color: var(--base);
+  touch-action: pan-x pan-y;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #0d0d12;
-}
-::-webkit-scrollbar-thumb {
-  background: #2a2a35;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #3d3d4d;
-}
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar               { width: 6px; height: 6px; }
+::-webkit-scrollbar-track         { background: transparent; }
+::-webkit-scrollbar-thumb         { background: var(--brd-med); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover   { background: var(--tx-3); }

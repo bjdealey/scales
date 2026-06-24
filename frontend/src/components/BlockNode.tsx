@@ -1,13 +1,17 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, GripVertical, Plus, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, GripVertical, Plus, X } from 'lucide-react';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Block, BlockType, BLOCK_META, PythonType, TYPE_LABELS } from '../types';
+import {
+  Block, BlockType, BLOCK_META, CompareOp, ConditionClause, ConditionExpr,
+  DEFAULT_CONDITION_EXPR, ElifBranch, LogicOp, PythonType, TYPE_LABELS,
+} from '../types';
 import { useBlockStore } from '../store/blockStore';
+import { useLineMap } from '../context/LineMapContext';
 
 const BLOCK_TYPES: BlockType[] = [
-  'http_request', 'set_variable', 'for_each', 'if_condition', 'print', 'file_write',
+  'http_request', 'set_variable', 'for_each', 'if_condition', 'print', 'file_write', 'comment',
 ];
 
 // Infer a Python type from the literal content of a typed value.
@@ -33,16 +37,14 @@ const TYPE_BADGE: Record<PythonType, string> = {
   Any:   'bg-gray-500/80 text-gray-100',
 };
 
-const INPUT_CLS =
-  'bg-white/[0.08] border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-400/70 w-full font-mono placeholder-white/25';
-
-const LABEL_CLS = 'text-white/40 text-xs w-20 flex-shrink-0';
+const INPUT_CLS = 'sk-input rounded-lg px-2 py-1 text-xs w-full';
+const LABEL_CLS = 'text-xs w-20 flex-shrink-0';
 const ROW_CLS   = 'flex items-center gap-2';
 
 const DROPDOWN_STYLE: React.CSSProperties = {
-  background: 'rgba(3,7,18,0.97)',
-  border: '1px solid rgba(255,255,255,0.12)',
-  boxShadow: '0 16px 32px rgba(0,0,0,0.7)',
+  background: 'var(--popup)',
+  border: '1px solid var(--brd-med)',
+  boxShadow: 'var(--popup-sh)',
   backdropFilter: 'blur(16px)',
 };
 
@@ -163,11 +165,10 @@ function SmartField({
     <div ref={anchorRef} className="flex-1 min-w-0">
       {/* Input row */}
       <div
-        className={`flex items-center rounded-lg text-xs transition-all ${
-          isVarRef
-            ? 'bg-violet-950/40 border border-violet-500/40'
-            : 'bg-white/[0.08] border border-white/10 hover:bg-white/[0.12]'
+        className={`flex items-center rounded-lg text-xs border transition-all ${
+          isVarRef ? 'bg-violet-950/40 border-violet-500/40' : ''
         }`}
+        style={!isVarRef ? { background: 'var(--in-bg)', borderColor: 'var(--in-brd)' } : {}}
       >
         <input
           value={value}
@@ -178,7 +179,8 @@ function SmartField({
             if (e.key === 'Enter' && filtered.length === 1) handleSelect(filtered[0].name);
           }}
           placeholder={placeholder}
-          className="flex-1 min-w-0 bg-transparent px-2 py-1 text-white placeholder-white/25 focus:outline-none font-mono"
+          style={{ color: 'var(--tx)' }}
+          className="flex-1 min-w-0 bg-transparent px-2 py-1 placeholder-[var(--tx-4)] focus:outline-none font-mono"
           spellCheck={false}
         />
         {/* Type badge when matched */}
@@ -187,22 +189,20 @@ function SmartField({
             {TYPE_LABELS[matchedVar.type]}
           </span>
         )}
-        {/* Clear button */}
         {value && (
           <button
             type="button"
             onClick={() => { onChange(''); setOpen(false); setCreating(false); }}
-            className={`flex-shrink-0 px-1.5 py-1 transition-colors ${
-              isVarRef
-                ? 'text-violet-400/50 hover:text-red-400 border-l border-violet-500/20'
-                : 'text-white/25 hover:text-red-400 border-l border-white/10'
+            className={`flex-shrink-0 px-1.5 py-1 transition-colors hover:text-red-400 border-l ${
+              isVarRef ? 'text-violet-400/50 border-violet-500/20' : 'border-[var(--brd)]'
             }`}
+            style={!isVarRef ? { color: 'var(--tx-4)' } : {}}
           >
             <X size={10} />
           </button>
         )}
         {!value && (
-          <ChevronDown size={10} className="flex-shrink-0 mr-2 text-white/20" />
+          <ChevronDown size={10} className="flex-shrink-0 mr-2" style={{ color: 'var(--tx-4)' }} />
         )}
       </div>
 
@@ -212,38 +212,35 @@ function SmartField({
 
           {/* Variable list */}
           {filtered.length > 0 && (
-            <div className={`py-1 max-h-44 overflow-y-auto ${showCreate ? 'border-b border-white/[0.06]' : ''}`}>
+            <div className={`py-1 max-h-44 overflow-y-auto ${showCreate ? 'border-b border-[var(--brd)]' : ''}`}>
               {filtered.map((v) => (
                 <button
                   key={v.id}
                   type="button"
                   onClick={() => handleSelect(v.name)}
-                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
-                    v.name === value ? 'bg-white/[0.10]' : 'hover:bg-white/[0.06]'
-                  }`}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                  style={v.name === value ? { background: 'var(--surface2)' } : {}}
                 >
                   <span className={`text-[10px] px-1.5 py-px rounded-full font-medium flex-shrink-0 ${TYPE_BADGE[v.type]}`}>
                     {TYPE_LABELS[v.type]}
                   </span>
-                  <span className="text-xs font-mono text-white">{v.name}</span>
+                  <span className="text-xs font-mono" style={{ color: 'var(--tx)' }}>{v.name}</span>
                 </button>
               ))}
             </div>
           )}
 
-          {/* Empty states */}
           {filtered.length === 0 && !value.trim() && (
-            <p className="px-3 py-2.5 text-[11px] text-white/25 text-center">
+            <p className="px-3 py-2.5 text-[11px] text-center" style={{ color: 'var(--tx-4)' }}>
               {compatible.length === 0
                 ? 'No variables yet — add some in the Variables tab'
                 : 'No matching variables'}
             </p>
           )}
           {filtered.length === 0 && value.trim() && !isVarRef && (
-            <p className="px-3 py-2 text-[11px] text-white/25">No matching variables</p>
+            <p className="px-3 py-2 text-[11px]" style={{ color: 'var(--tx-4)' }}>No matching variables</p>
           )}
 
-          {/* Save as variable option */}
           {showCreate && (
             creating ? (
               <div className="px-3 py-2 flex items-center gap-1.5">
@@ -256,7 +253,7 @@ function SmartField({
                     if (e.key === 'Escape') cancelCreate();
                   }}
                   placeholder="variable_name"
-                  className="flex-1 bg-white/[0.08] border border-white/10 rounded-lg px-2 py-1 text-xs text-white placeholder-white/25 focus:outline-none focus:border-blue-400/70 font-mono"
+                  className="sk-input flex-1 rounded-lg px-2 py-1 text-xs"
                   spellCheck={false}
                 />
                 <button
@@ -267,7 +264,7 @@ function SmartField({
                 >
                   Save
                 </button>
-                <button type="button" onClick={cancelCreate} className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0">
+                <button type="button" onClick={cancelCreate} className="hover:text-red-400 transition-colors flex-shrink-0" style={{ color: 'var(--tx-3)' }}>
                   <X size={12} />
                 </button>
               </div>
@@ -275,7 +272,7 @@ function SmartField({
               <button
                 type="button"
                 onClick={() => { setCreating(true); setNewVarName(''); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left text-blue-400/80 hover:text-blue-300 hover:bg-white/[0.04] transition-colors text-[11px]"
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-blue-400/80 hover:text-blue-300 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] transition-colors text-[11px]"
               >
                 <Plus size={11} className="flex-shrink-0" />
                 <span className="flex-1">Save &ldquo;{value}&rdquo; as a variable</span>
@@ -336,11 +333,10 @@ function OutputVarField({
   return (
     <div ref={anchorRef} className="flex-1 min-w-0">
       <div
-        className={`flex items-center rounded-lg text-xs transition-all ${
-          exists
-            ? 'bg-violet-950/40 border border-violet-500/40'
-            : 'bg-white/[0.08] border border-white/10 hover:bg-white/[0.12]'
+        className={`flex items-center rounded-lg text-xs border transition-all ${
+          exists ? 'bg-violet-950/40 border-violet-500/40' : ''
         }`}
+        style={!exists ? { background: 'var(--in-bg)', borderColor: 'var(--in-brd)' } : {}}
       >
         <input
           value={value}
@@ -352,7 +348,8 @@ function OutputVarField({
             if (e.key === 'Enter' && showCreate && filtered.length === 0) handleCreate();
           }}
           placeholder="variable_name"
-          className="flex-1 min-w-0 bg-transparent px-2 py-1 text-white placeholder-white/25 focus:outline-none font-mono"
+          style={{ color: 'var(--tx)' }}
+          className="flex-1 min-w-0 bg-transparent px-2 py-1 placeholder-[var(--tx-4)] focus:outline-none font-mono"
           spellCheck={false}
         />
         {exists && matchedVar && (
@@ -364,41 +361,39 @@ function OutputVarField({
           <button
             type="button"
             onClick={() => { onChange(''); setOpen(false); }}
-            className={`flex-shrink-0 px-1.5 py-1 transition-colors ${
-              exists
-                ? 'text-violet-400/50 hover:text-red-400 border-l border-violet-500/20'
-                : 'text-white/25 hover:text-red-400 border-l border-white/10'
+            className={`flex-shrink-0 px-1.5 py-1 transition-colors hover:text-red-400 border-l ${
+              exists ? 'text-violet-400/50 border-violet-500/20' : 'border-[var(--brd)]'
             }`}
+            style={!exists ? { color: 'var(--tx-4)' } : {}}
           >
             <X size={10} />
           </button>
         )}
-        {!value && <ChevronDown size={10} className="flex-shrink-0 mr-2 text-white/20" />}
+        {!value && <ChevronDown size={10} className="flex-shrink-0 mr-2" style={{ color: 'var(--tx-4)' }} />}
       </div>
 
       <DropdownPortal anchorRef={anchorRef} contentRef={contentRef} open={open}>
         <div className="rounded-xl overflow-hidden" style={DROPDOWN_STYLE}>
           {filtered.length > 0 && (
-            <div className={`py-1 max-h-44 overflow-y-auto ${showCreate ? 'border-b border-white/[0.06]' : ''}`}>
+            <div className={`py-1 max-h-44 overflow-y-auto ${showCreate ? 'border-b border-[var(--brd)]' : ''}`}>
               {filtered.map((v) => (
                 <button
                   key={v.id}
                   type="button"
                   onClick={() => handleSelect(v.name)}
-                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
-                    v.name === value ? 'bg-white/[0.10]' : 'hover:bg-white/[0.06]'
-                  }`}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                  style={v.name === value ? { background: 'var(--surface2)' } : {}}
                 >
                   <span className={`text-[10px] px-1.5 py-px rounded-full font-medium flex-shrink-0 ${TYPE_BADGE[v.type]}`}>
                     {TYPE_LABELS[v.type]}
                   </span>
-                  <span className="text-xs font-mono text-white">{v.name}</span>
+                  <span className="text-xs font-mono" style={{ color: 'var(--tx)' }}>{v.name}</span>
                 </button>
               ))}
             </div>
           )}
           {filtered.length === 0 && !value.trim() && (
-            <p className="px-3 py-2.5 text-[11px] text-white/25 text-center">
+            <p className="px-3 py-2.5 text-[11px] text-center" style={{ color: 'var(--tx-4)' }}>
               {named.length === 0 ? 'No variables yet' : 'No matching variables'}
             </p>
           )}
@@ -406,7 +401,7 @@ function OutputVarField({
             <button
               type="button"
               onClick={handleCreate}
-              className="w-full flex items-center gap-2 px-3 py-2 text-left text-blue-400/80 hover:text-blue-300 hover:bg-white/[0.04] transition-colors text-[11px]"
+              className="w-full flex items-center gap-2 px-3 py-2 text-left text-blue-400/80 hover:text-blue-300 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] transition-colors text-[11px]"
             >
               <Plus size={11} className="flex-shrink-0" />
               Create variable &ldquo;{value}&rdquo;
@@ -418,8 +413,176 @@ function OutputVarField({
   );
 }
 
+// ── Condition builder ─────────────────────────────────────────────────────────
+
+const OP_OPTIONS: { value: CompareOp; label: string; short: string }[] = [
+  { value: 'is',     label: 'is (truthy/exists)',    short: 'is'     },
+  { value: '==',     label: '== equals',             short: '=='     },
+  { value: '!=',     label: '!= not equals',         short: '!='     },
+  { value: '>',      label: '> greater than',        short: '>'      },
+  { value: '<',      label: '< less than',           short: '<'      },
+  { value: '>=',     label: '>= greater or equal',   short: '>='     },
+  { value: '<=',     label: '<= less or equal',      short: '<='     },
+  { value: 'in',     label: 'in (contains)',         short: 'in'     },
+  { value: 'not in', label: 'not in (excludes)',     short: 'not in' },
+];
+
+function parseCondExpr(json: string): ConditionExpr {
+  try {
+    const v = JSON.parse(json) as ConditionExpr;
+    if (v?.clauses?.length) return v;
+  } catch { /* fall through */ }
+  return { ...DEFAULT_CONDITION_EXPR, clauses: [{ ...DEFAULT_CONDITION_EXPR.clauses[0] }] };
+}
+
+function ConditionBuilder({
+  value,
+  onChange,
+}: {
+  value: string;         // JSON-serialised ConditionExpr
+  onChange: (v: string) => void;
+}) {
+  const expr = useMemo(() => parseCondExpr(value), [value]);
+  const save = (next: ConditionExpr) => onChange(JSON.stringify(next));
+
+  const updateClause = (i: number, patch: Partial<ConditionClause>) => {
+    const clauses = expr.clauses.map((c, j) => j === i ? { ...c, ...patch } : c);
+    // If op changed to 'is', clear right
+    if (patch.op === 'is') clauses[i].right = '';
+    save({ ...expr, clauses });
+  };
+
+  const addClause = (joiner: LogicOp) => {
+    save({
+      clauses: [...expr.clauses, { not: false, left: '', op: 'is', right: '' }],
+      joiners: [...expr.joiners, joiner],
+    });
+  };
+
+  const removeClause = (i: number) => {
+    const clauses = expr.clauses.filter((_, j) => j !== i);
+    const joiners = expr.joiners.filter((_, j) => j !== i && j !== i - 1).slice(0, clauses.length - 1);
+    save({ clauses, joiners });
+  };
+
+  const toggleJoiner = (i: number) => {
+    const joiners = expr.joiners.map((j, k) => k === i ? (j === 'and' ? 'or' : 'and') : j);
+    save({ ...expr, joiners });
+  };
+
+  return (
+    <div className="space-y-2 mt-2">
+      {expr.clauses.map((clause, i) => {
+        const showRight = clause.op !== 'is';
+        return (
+          <div key={i}>
+            {/* Joiner between clauses */}
+            {i > 0 && (
+              <div className="flex items-center gap-2 py-1">
+                <div className="flex-1 h-px" style={{ background: 'var(--brd)' }} />
+                <button
+                  type="button"
+                  onClick={() => toggleJoiner(i - 1)}
+                  className="px-3 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-widest border transition-all"
+                  style={{ background: 'var(--surface)', borderColor: 'var(--brd-med)', color: 'var(--tx-3)' }}
+                >
+                  {expr.joiners[i - 1] ?? 'and'}
+                </button>
+                <div className="flex-1 h-px" style={{ background: 'var(--brd)' }} />
+              </div>
+            )}
+
+            {/* Clause row */}
+            <div className="flex items-center gap-1.5">
+              {/* NOT toggle */}
+              <button
+                type="button"
+                onClick={() => updateClause(i, { not: !clause.not })}
+                title="Wrap with not(...)"
+                className="flex-shrink-0 text-[9px] font-mono font-bold px-1.5 py-[5px] rounded-md border transition-all leading-none"
+                style={clause.not
+                  ? { background: 'rgba(245,158,11,0.2)', borderColor: 'rgba(251,191,36,0.5)', color: 'rgb(252,211,77)' }
+                  : { background: 'var(--surface)', borderColor: 'var(--brd)', color: 'var(--tx-4)' }
+                }
+              >
+                NOT
+              </button>
+
+              {/* Left operand */}
+              <SmartField
+                value={clause.left}
+                onChange={(v) => updateClause(i, { left: v })}
+                placeholder={clause.op === 'in' || clause.op === 'not in' ? 'item' : 'value or variable'}
+              />
+
+              {/* Operator */}
+              <select
+                value={clause.op}
+                onChange={(e) => updateClause(i, { op: e.target.value as CompareOp })}
+                className="sk-select flex-shrink-0 rounded-lg px-1.5 py-[5px] text-[11px] font-mono"
+                style={{ minWidth: 72 }}
+              >
+                {OP_OPTIONS.map(({ value: v, label }) => (
+                  <option key={v} value={v}>{label}</option>
+                ))}
+              </select>
+
+              {/* Right operand — hidden for 'is' */}
+              {showRight ? (
+                <SmartField
+                  value={clause.right}
+                  onChange={(v) => updateClause(i, { right: v })}
+                  placeholder={
+                    clause.op === 'in' || clause.op === 'not in'
+                      ? 'list or variable'
+                      : clause.op === '>' || clause.op === '<' || clause.op === '>=' || clause.op === '<='
+                        ? 'number or variable'
+                        : 'value or variable'
+                  }
+                />
+              ) : (
+                <div className="flex-1" />
+              )}
+
+              {/* Remove clause */}
+              {expr.clauses.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeClause(i)}
+                  className="flex-shrink-0 hover:text-red-400 transition-colors"
+                  style={{ color: 'var(--tx-4)' }}
+                >
+                  <X size={11} />
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Add clause */}
+      <div className="flex items-center gap-1.5 pt-0.5">
+        <span className="text-[10px] font-mono" style={{ color: 'var(--tx-4)' }}>+</span>
+        {(['and', 'or'] as LogicOp[]).map((j) => (
+          <button
+            key={j}
+            type="button"
+            onClick={() => addClause(j)}
+            className="text-[10px] font-mono transition-colors px-2 py-0.5 rounded border border-dashed hover:text-blue-400"
+            style={{ color: 'var(--tx-3)', borderColor: 'var(--brd-med)' }}
+          >
+            {j}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Compact "+" circle between/after blocks. Clicking expands to a full-width search input.
-export function InsertBlockMenu({ index, parentId, inElse }: { index: number; parentId?: string; inElse?: boolean }) {
+export function InsertBlockMenu({ index, parentId, inElse, elifIdx }: { index: number; parentId?: string; inElse?: boolean; elifIdx?: number }) {
   const [open, setOpen]   = useState(false);
   const [query, setQuery] = useState('');
   const insertBlock = useBlockStore((s) => s.insertBlock);
@@ -454,12 +617,12 @@ export function InsertBlockMenu({ index, parentId, inElse }: { index: number; pa
           onKeyDown={(e) => {
             if (e.key === 'Escape') close();
             if (e.key === 'Enter' && filtered.length === 1) {
-              insertBlock(filtered[0], index, parentId, inElse);
+              insertBlock(filtered[0], index, parentId, inElse, elifIdx);
               close();
             }
           }}
           placeholder="+ Add action"
-          className="w-full bg-white/[0.08] border border-white/10 rounded-xl px-2 py-1 text-xs text-white placeholder-white/25 focus:outline-none font-mono"
+          className="sk-input w-full rounded-xl px-2 py-1 text-xs"
           spellCheck={false}
         />
       ) : (
@@ -467,7 +630,8 @@ export function InsertBlockMenu({ index, parentId, inElse }: { index: number; pa
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="w-5 h-5 rounded-full border border-dashed flex items-center justify-center transition-all border-white/15 text-white/20 group-hover:border-white/35 group-hover:text-white/45"
+            className="w-5 h-5 rounded-full border border-dashed flex items-center justify-center transition-all"
+            style={{ borderColor: 'var(--brd-med)', color: 'var(--tx-4)' }}
           >
             <Plus size={9} />
           </button>
@@ -483,15 +647,15 @@ export function InsertBlockMenu({ index, parentId, inElse }: { index: number; pa
                 <button
                   key={type}
                   type="button"
-                  onClick={() => { insertBlock(type, index, parentId, inElse); close(); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/[0.06] transition-colors"
+                  onClick={() => { insertBlock(type, index, parentId, inElse, elifIdx); close(); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors"
                 >
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.color}`} />
-                  <span className="text-xs text-white">{meta.label}</span>
+                  <span className="text-xs" style={{ color: 'var(--tx)' }}>{meta.label}</span>
                 </button>
               );
             }) : (
-              <p className="px-3 py-2 text-[11px] text-white/25">No matching actions</p>
+              <p className="px-3 py-2 text-[11px]" style={{ color: 'var(--tx-4)' }}>No matching actions</p>
             )}
           </div>
         </div>
@@ -500,7 +664,7 @@ export function InsertBlockMenu({ index, parentId, inElse }: { index: number; pa
   );
 }
 
-export function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolean }) {
+export function AddBlockMenu({ parentId, inElse, elifIdx }: { parentId?: string; inElse?: boolean; elifIdx?: number }) {
   const [open, setOpen]   = useState(false);
   const [query, setQuery] = useState('');
   const addBlock   = useBlockStore((s) => s.addBlock);
@@ -532,16 +696,13 @@ export function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?:
         onKeyDown={(e) => {
           if (e.key === 'Escape') close();
           if (e.key === 'Enter' && filtered.length === 1) {
-            addBlock(filtered[0], parentId, inElse);
+            addBlock(filtered[0], parentId, inElse, elifIdx);
             close();
           }
         }}
         placeholder={`+ Add action${inElse ? ' (else)' : ''}`}
-        className={`w-full text-xs px-2 py-1 rounded-xl transition-colors focus:outline-none font-mono ${
-          open
-            ? 'bg-white/[0.08] border border-white/10 text-white placeholder-white/25'
-            : 'bg-transparent border border-dashed border-white/15 text-white/25 placeholder-white/25 hover:border-white/30 hover:placeholder-white/50 cursor-pointer'
-        }`}
+        className="sk-input w-full text-xs px-2 py-1 rounded-xl"
+        style={open ? {} : { background: 'transparent', borderStyle: 'dashed', color: 'var(--tx-3)', cursor: 'pointer' }}
         spellCheck={false}
       />
 
@@ -554,15 +715,15 @@ export function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?:
                 <button
                   key={type}
                   type="button"
-                  onClick={() => { addBlock(type, parentId, inElse); close(); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/[0.06] transition-colors"
+                  onClick={() => { addBlock(type, parentId, inElse, elifIdx); close(); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors"
                 >
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.color}`} />
-                  <span className="text-xs text-white">{meta.label}</span>
+                  <span className="text-xs" style={{ color: 'var(--tx)' }}>{meta.label}</span>
                 </button>
               );
             }) : (
-              <p className="px-3 py-2 text-[11px] text-white/25">No matching actions</p>
+              <p className="px-3 py-2 text-[11px]" style={{ color: 'var(--tx-4)' }}>No matching actions</p>
             )}
           </div>
         </div>
@@ -621,7 +782,8 @@ function HttpRequestParams({ block }: { block: Block }) {
       <button
         type="button"
         onClick={() => setShowAdvanced((v) => !v)}
-        className="text-[11px] text-white/25 hover:text-white/50 transition-colors pt-0.5"
+        className="text-[11px] transition-colors pt-0.5 hover:text-blue-400"
+      style={{ color: 'var(--tx-3)' }}
       >
         {showAdvanced ? '− Hide advanced' : '+ Advanced (data, files, cookies, auth)'}
       </button>
@@ -713,28 +875,22 @@ function BlockParams({ block }: { block: Block }) {
 
     case 'if_condition':
       return (
-        <div className={`${ROW_CLS} mt-2`}>
-          <span className="text-white/35 text-xs font-mono flex-shrink-0">if</span>
-          <SmartField
-            value={block.params.condition || ''}
-            onChange={(v) => set('condition', v)}
-            types={['bool', 'Any']}
-            placeholder="response.ok"
-          />
-          <span className="text-white/35 text-xs font-mono flex-shrink-0">:</span>
-        </div>
+        <ConditionBuilder
+          value={block.params.conditionExpr || ''}
+          onChange={(v) => set('conditionExpr', v)}
+        />
       );
 
     case 'print':
       return (
         <div className={`${ROW_CLS} mt-2`}>
-          <span className="text-white/35 text-xs font-mono flex-shrink-0">print(</span>
+          <span className="text-xs font-mono flex-shrink-0" style={{ color: 'var(--tx-3)' }}>print(</span>
           <SmartField
             value={block.params.expression || ''}
             onChange={(v) => set('expression', v)}
             placeholder="Hello, world!"
           />
-          <span className="text-white/35 text-xs font-mono flex-shrink-0">)</span>
+          <span className="text-xs font-mono flex-shrink-0" style={{ color: 'var(--tx-3)' }}>)</span>
         </div>
       );
 
@@ -761,14 +917,87 @@ function BlockParams({ block }: { block: Block }) {
         </div>
       );
 
+    case 'comment':
+      return (
+        <div className={`${ROW_CLS} mt-2`}>
+          <span className="text-xs font-mono flex-shrink-0" style={{ color: 'var(--tx-3)' }}>#</span>
+          <input
+            value={block.params.text || ''}
+            onChange={up('text')}
+            className={`${INPUT_CLS} flex-1`}
+            placeholder="your comment here"
+          />
+        </div>
+      );
+
     default:
       return null;
   }
 }
 
+function ElifSection({
+  branch,
+  branchIdx,
+  blockId,
+  depth,
+}: {
+  branch: ElifBranch;
+  branchIdx: number;
+  blockId: string;
+  depth: number;
+}) {
+  const removeElifBranch   = useBlockStore((s) => s.removeElifBranch);
+  const updateElifCondition = useBlockStore((s) => s.updateElifCondition);
+
+  return (
+    <div className="mt-3 pl-3 border-l" style={{ borderColor: 'var(--brd-med)' }}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-mono" style={{ color: 'var(--tx-3)' }}>elif</span>
+        <button
+          type="button"
+          onClick={() => removeElifBranch(blockId, branchIdx)}
+          title="Remove elif"
+          className="hover:text-red-400 transition-colors"
+          style={{ color: 'var(--tx-4)' }}
+        >
+          <X size={11} />
+        </button>
+      </div>
+      <ConditionBuilder
+        value={branch.condition}
+        onChange={(v) => updateElifCondition(blockId, branchIdx, v)}
+      />
+      {branch.children.length === 0 ? (
+        <AddBlockMenu parentId={blockId} elifIdx={branchIdx} />
+      ) : (
+        <SortableContext items={branch.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+          {branch.children.map((child, i) => (
+            <div key={child.id}>
+              <BlockNode block={child} depth={depth + 1} />
+              <InsertBlockMenu index={i + 1} parentId={blockId} elifIdx={branchIdx} />
+            </div>
+          ))}
+        </SortableContext>
+      )}
+    </div>
+  );
+}
+
 export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: number }) {
-  const removeBlock = useBlockStore((s) => s.removeBlock);
-  const meta        = BLOCK_META[block.type];
+  const removeBlock     = useBlockStore((s) => s.removeBlock);
+  const addElifBranch   = useBlockStore((s) => s.addElifBranch);
+  const selectBlock     = useBlockStore((s) => s.selectBlock);
+  const setCollapsed    = useBlockStore((s) => s.setCollapsed);
+  const selectedBlockId = useBlockStore((s) => s.selectedBlockId);
+  const isCollapsed     = useBlockStore((s) => !!s.collapsedBlocks[block.id]);
+  const isSelected      = selectedBlockId === block.id;
+  const meta            = BLOCK_META[block.type];
+  const lineMap         = useLineMap();
+  const lineNum         = lineMap[block.id];
+
+  const childCount = block.children.length
+    + block.elseChildren.length
+    + block.elifBranches.reduce((n, br) => n + br.children.length, 0);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
@@ -784,10 +1013,18 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="my-1">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="my-1"
+      onClick={(e) => { e.stopPropagation(); selectBlock(block.id); }}
+    >
       <div
-        className={`rounded-2xl border ${meta.borderColor} overflow-hidden`}
-        style={{ background: 'rgba(255,255,255,0.04)' }}
+        className={`rounded-2xl border overflow-hidden transition-all duration-100 ${isSelected ? 'border-black/25 dark:border-white/45' : meta.borderColor}`}
+        style={{
+          background: 'var(--surface)',
+          boxShadow: isSelected ? `0 0 0 2px var(--sel-ring)` : undefined,
+        }}
       >
         <div className={`${meta.color} px-3 py-1.5 flex items-center gap-1.5`}>
           {/* Drag handle — only this triggers drag, leaving inputs/buttons unaffected */}
@@ -803,18 +1040,31 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
           <span className="text-white font-semibold text-xs uppercase tracking-wider flex-1">
             {meta.label}
           </span>
+          {lineNum && (
+            <span className="text-[10px] font-mono text-white/30 mr-0.5">L{lineNum}</span>
+          )}
+          {isCollapsed && childCount > 0 && (
+            <span className="text-white/30 text-[10px] font-mono mr-1">{childCount}</span>
+          )}
+          <button
+            onClick={() => setCollapsed(block.id, !isCollapsed)}
+            title={isCollapsed ? 'Expand' : 'Collapse'}
+            className="text-white/40 hover:text-white/80 w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition-colors"
+          >
+            {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+          </button>
           <button onClick={() => removeBlock(block.id)} title="Remove"
             className="text-white/50 hover:text-red-300 w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition-colors">
             <X size={12} />
           </button>
         </div>
 
-        <div className="px-3 pb-3">
+        {!isCollapsed && <div className="px-3 pb-3">
           <BlockParams block={block} />
 
           {meta.isContainer && (
-            <div className="mt-3 pl-3 border-l border-white/15">
-              <p className="text-xs text-white/30 mb-1 font-mono">do:</p>
+            <div className="mt-3 pl-3 border-l" style={{ borderColor: 'var(--brd-med)' }}>
+              <p className="text-xs mb-1 font-mono" style={{ color: 'var(--tx-3)' }}>do:</p>
               {block.children.length === 0 ? (
                 <AddBlockMenu parentId={block.id} />
               ) : (
@@ -830,9 +1080,24 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
             </div>
           )}
 
+          {block.type === 'if_condition' && (block.elifBranches ?? []).map((branch, idx) => (
+            <ElifSection key={idx} branch={branch} branchIdx={idx} blockId={block.id} depth={depth} />
+          ))}
+
           {block.type === 'if_condition' && (
-            <div className="mt-3 pl-3 border-l border-white/15">
-              <p className="text-xs text-white/30 mb-1 font-mono">else: (optional)</p>
+            <button
+              type="button"
+              onClick={() => addElifBranch(block.id)}
+              className="mt-2 ml-3 text-[11px] transition-colors font-mono hover:text-blue-400"
+              style={{ color: 'var(--tx-3)' }}
+            >
+              + elif
+            </button>
+          )}
+
+          {block.type === 'if_condition' && (
+            <div className="mt-3 pl-3 border-l" style={{ borderColor: 'var(--brd-med)' }}>
+              <p className="text-xs mb-1 font-mono" style={{ color: 'var(--tx-3)' }}>else: (optional)</p>
               {block.elseChildren.length === 0 ? (
                 <AddBlockMenu parentId={block.id} inElse={true} />
               ) : (
@@ -847,7 +1112,29 @@ export default function BlockNode({ block, depth = 0 }: { block: Block; depth?: 
               )}
             </div>
           )}
-        </div>
+        </div>}
+
+        {isSelected && (
+          <div className="px-3 pb-2">
+            <div className="pt-2 border-t flex items-center gap-3 flex-wrap" style={{ borderColor: 'var(--brd)' }}>
+              {[
+                ['↑↓', 'select'],
+                ['⌘↑↓', 'move'],
+                ['←→', 'collapse'],
+                ['⌘C', 'copy'],
+                ['⌘X', 'cut'],
+                ['⌘V', 'paste'],
+                ['⌫', 'delete'],
+                ['Esc', 'deselect'],
+              ].map(([key, label]) => (
+                <span key={key} className="flex items-center gap-1 text-[10px]" style={{ color: 'var(--tx-3)' }}>
+                  <kbd className="font-mono" style={{ color: 'var(--tx-2)' }}>{key}</kbd>
+                  <span>{label}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

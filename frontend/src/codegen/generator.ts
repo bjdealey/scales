@@ -1,4 +1,4 @@
-import { Block, BlockType, Variable, DictEntry, ListItem, PrimitiveType } from '../types';
+import { Block, BlockType, Variable, DictEntry, ListItem, PrimitiveType, ConditionExpr, ConditionClause, BLOCK_META } from '../types';
 
 function collectImports(blocks: Block[]): Set<string> {
   const imports = new Set<string>();
@@ -6,6 +6,7 @@ function collectImports(blocks: Block[]): Set<string> {
     if (block.type === 'http_request') imports.add('requests');
     block.children.forEach(scan);
     block.elseChildren.forEach(scan);
+    (block.elifBranches ?? []).forEach((b) => b.children.forEach(scan));
   }
   blocks.forEach(scan);
   return imports;
@@ -28,6 +29,42 @@ function resolveField(
   if (varNames.has(v)) return v;
   if (autoQuote) return `"${escapeStr(v)}"`;
   return v;
+}
+
+// Like resolveField with autoQuote=true but treats numbers, bools, None, and
+// Python collection literals as raw values rather than quoting them.
+function resolveCondVal(value: string, varNames: Set<string>, fallback: string): string {
+  const v = value.trim();
+  if (!v) return fallback;
+  if (varNames.has(v)) return v;
+  if (v === 'True' || v === 'False' || v === 'None') return v;
+  if (/^-?\d/.test(v)) return v;                                  // number literal
+  if (v.startsWith('[') || v.startsWith('{') || v.startsWith('(')) return v; // collection
+  if ((v[0] === '"' && v[v.length - 1] === '"') ||
+      (v[0] === "'" && v[v.length - 1] === "'")) return v;        // already quoted
+  return `"${escapeStr(v)}"`;                                      // auto-quote string
+}
+
+function clauseToString(c: ConditionClause, varNames: Set<string>): string {
+  const left = resolveCondVal(c.left, varNames, 'True');
+  if (c.op === 'is') {
+    return c.not ? `not ${left}` : left;
+  }
+  const right = resolveCondVal(c.right, varNames, 'None');
+  const expr = `${left} ${c.op} ${right}`;
+  return c.not ? `not (${expr})` : expr;
+}
+
+function conditionExprToString(json: string, varNames: Set<string>): string {
+  try {
+    const expr = JSON.parse(json) as ConditionExpr;
+    if (!expr?.clauses?.length) return 'True';
+    return expr.clauses
+      .map((c, i) => (i > 0 ? `${expr.joiners[i - 1]} ` : '') + clauseToString(c, varNames))
+      .join(' ');
+  } catch {
+    return json || 'True';   // fallback: treat as raw Python (backward-compat)
+  }
 }
 
 function generateBlock(block: Block, indent: number, varNames: Set<string>): string {
@@ -72,12 +109,18 @@ function generateBlock(block: Block, indent: number, varNames: Set<string>): str
     }
 
     case 'if_condition': {
-      const { condition = '' } = block.params;
-      const condExpr = resolveField(condition, varNames, false, 'True');
+      const condStr = conditionExprToString(block.params.conditionExpr || '', varNames);
       const body = block.children.length > 0
         ? block.children.map((c) => generateBlock(c, indent + 1, varNames)).join('\n')
         : `${pad1}pass`;
-      let code = `${pad}if ${condExpr}:\n${body}`;
+      let code = `${pad}if ${condStr}:\n${body}`;
+      for (const branch of (block.elifBranches ?? [])) {
+        const elifStr  = conditionExprToString(branch.condition || '', varNames);
+        const elifBody = branch.children.length > 0
+          ? branch.children.map((c) => generateBlock(c, indent + 1, varNames)).join('\n')
+          : `${pad1}pass`;
+        code += `\n${pad}elif ${elifStr}:\n${elifBody}`;
+      }
       if (block.elseChildren.length > 0) {
         const elseBody = block.elseChildren
           .map((c) => generateBlock(c, indent + 1, varNames)).join('\n');
@@ -97,6 +140,11 @@ function generateBlock(block: Block, indent: number, varNames: Set<string>): str
       const pathExpr    = resolveField(path,    varNames, true, 'output.txt');
       const contentExpr = resolveField(content, varNames, true, '');
       return `${pad}with open(${pathExpr}, 'w') as f:\n${pad1}f.write(str(${contentExpr || '""'}))`;
+    }
+
+    case 'comment': {
+      const { text = '' } = block.params;
+      return `${pad}# ${text}`;
     }
 
     default:
@@ -150,6 +198,56 @@ function generateVariables(variables: Variable[]): string {
       return `${v.name}${annotation} = ${formatValue(v)}`;
     })
     .join('\n');
+}
+
+/** Returns a map of blockId → 1-based start line number in the generated Python script. */
+export function buildLineMap(blocks: Block[], variables: Variable[] = []): Record<string, number> {
+  const map: Record<string, number> = {};
+  if (blocks.length === 0) return map;
+
+  const namedVars = variables.filter((v) => v.name.trim());
+  const varNames  = new Set(namedVars.map((v) => v.name));
+
+  let line = 1;
+
+  // Count import section
+  const imports    = collectImports(blocks);
+  const stdImports = [...imports].map((m) => `import ${m}`);
+  if (namedVars.some((v) => v.constant)) stdImports.unshift('from typing import Final');
+  if (stdImports.length > 0) line += stdImports.length + 1; // lines + blank separator
+
+  // Count variable section
+  const varCode = generateVariables(namedVars as Variable[]);
+  if (varCode) line += varCode.split('\n').length + 1;
+
+  function walk(list: Block[], indent: number) {
+    for (const block of list) {
+      map[block.id] = line;
+
+      if (!BLOCK_META[block.type].isContainer) {
+        line += generateBlock(block, indent, varNames).split('\n').length;
+      } else {
+        line++; // container header line (for .../if ...)
+        if (block.children.length > 0) { walk(block.children, indent + 1); }
+        else { line++; } // pass
+
+        if (block.type === 'if_condition') {
+          for (const br of block.elifBranches ?? []) {
+            line++; // elif ...
+            if (br.children.length > 0) { walk(br.children, indent + 1); }
+            else { line++; }
+          }
+          if (block.elseChildren.length > 0) {
+            line++; // else:
+            walk(block.elseChildren, indent + 1);
+          }
+        }
+      }
+    }
+  }
+
+  walk(blocks, 0);
+  return map;
 }
 
 export function generatePython(blocks: Block[], variables: Variable[] = []): string {

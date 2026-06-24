@@ -9,19 +9,31 @@ interface BlockStore {
   blocks: Block[];
   variables: Variable[];
   variableSortMode: SortMode;
+  selectedBlockId: string | null;
+  clipboardBlock: Block | null;
+  collapsedBlocks: Record<string, boolean>;
   _past: Snapshot[];
   _future: Snapshot[];
   setVariableSortMode: (mode: SortMode) => void;
   undo: () => void;
   redo: () => void;
-  addBlock: (type: BlockType, parentId?: string, inElse?: boolean) => void;
-  insertBlock: (type: BlockType, index: number, parentId?: string, inElse?: boolean) => void;
+  addBlock: (type: BlockType, parentId?: string, inElse?: boolean, elifIdx?: number) => void;
+  insertBlock: (type: BlockType, index: number, parentId?: string, inElse?: boolean, elifIdx?: number) => void;
   reorderBlocks: (activeId: string, overId: string) => void;
   reorderVariables: (activeId: string, overId: string) => void;
   removeBlock: (id: string) => void;
   updateBlock: (id: string, params: Record<string, string>) => void;
   moveBlock: (id: string, direction: 'up' | 'down') => void;
+  selectBlock: (id: string | null) => void;
+  setCollapsed: (id: string, collapsed: boolean) => void;
+  copyBlock: (id: string) => void;
+  cutBlock: (id: string) => void;
+  pasteBlock: () => void;
   clearAll: () => void;
+  loadScript: (blocks: Block[], variables: Omit<Variable, 'id'>[]) => void;
+  addElifBranch: (blockId: string) => void;
+  removeElifBranch: (blockId: string, idx: number) => void;
+  updateElifCondition: (blockId: string, idx: number, condition: string) => void;
   addVariable: () => void;
   addVariableWithName: (name: string, type: PythonType, initialValue?: string) => void;
   removeVariable: (id: string) => void;
@@ -101,6 +113,7 @@ function clearVarRefs(blocks: Block[], name: string): void {
     }
     clearVarRefs(block.children, name);
     clearVarRefs(block.elseChildren, name);
+    for (const br of block.elifBranches) clearVarRefs(br.children, name);
   }
 }
 
@@ -111,7 +124,21 @@ function createBlock(type: BlockType): Block {
     params: { ...BLOCK_DEFAULTS[type] },
     children: [],
     elseChildren: [],
+    elifBranches: [],
   };
+}
+
+function findBlock(blocks: Block[], id: string): Block | null {
+  for (const b of blocks) {
+    if (b.id === id) return b;
+    const c = findBlock(b.children, id) ?? findBlock(b.elseChildren, id);
+    if (c) return c;
+    for (const br of b.elifBranches) {
+      const e = findBlock(br.children, id);
+      if (e) return e;
+    }
+  }
+  return null;
 }
 
 function findAndAdd(
@@ -119,18 +146,24 @@ function findAndAdd(
   parentId: string,
   newBlock: Block,
   inElse: boolean,
+  elifIdx?: number,
 ): boolean {
   for (const block of blocks) {
     if (block.id === parentId) {
-      if (inElse) {
+      if (elifIdx !== undefined) {
+        block.elifBranches[elifIdx]?.children.push(newBlock);
+      } else if (inElse) {
         block.elseChildren.push(newBlock);
       } else {
         block.children.push(newBlock);
       }
       return true;
     }
-    if (findAndAdd(block.children, parentId, newBlock, inElse)) return true;
-    if (findAndAdd(block.elseChildren, parentId, newBlock, inElse)) return true;
+    if (findAndAdd(block.children, parentId, newBlock, inElse, elifIdx)) return true;
+    if (findAndAdd(block.elseChildren, parentId, newBlock, inElse, elifIdx)) return true;
+    for (const br of block.elifBranches) {
+      if (findAndAdd(br.children, parentId, newBlock, inElse, elifIdx)) return true;
+    }
   }
   return false;
 }
@@ -141,33 +174,46 @@ function findAndInsert(
   newBlock: Block,
   index: number,
   inElse: boolean,
+  elifIdx?: number,
 ): boolean {
   for (const block of blocks) {
     if (block.id === parentId) {
-      const arr = inElse ? block.elseChildren : block.children;
-      arr.splice(index, 0, newBlock);
+      if (elifIdx !== undefined) {
+        block.elifBranches[elifIdx]?.children.splice(index, 0, newBlock);
+      } else {
+        const arr = inElse ? block.elseChildren : block.children;
+        arr.splice(index, 0, newBlock);
+      }
       return true;
     }
-    if (findAndInsert(block.children, parentId, newBlock, index, inElse)) return true;
-    if (findAndInsert(block.elseChildren, parentId, newBlock, index, inElse)) return true;
+    if (findAndInsert(block.children, parentId, newBlock, index, inElse, elifIdx)) return true;
+    if (findAndInsert(block.elseChildren, parentId, newBlock, index, inElse, elifIdx)) return true;
+    for (const br of block.elifBranches) {
+      if (findAndInsert(br.children, parentId, newBlock, index, inElse, elifIdx)) return true;
+    }
   }
   return false;
 }
 
-type BlockCtx = { arr: Block[]; index: number; parentId?: string; inElse: boolean };
+type BlockCtx = { arr: Block[]; index: number; parentId?: string; inElse: boolean; elifIdx?: number };
 
 function findBlockCtx(
   blocks: Block[],
   id: string,
   parentId?: string,
   inElse = false,
+  elifIdx?: number,
 ): BlockCtx | null {
   for (let i = 0; i < blocks.length; i++) {
-    if (blocks[i].id === id) return { arr: blocks, index: i, parentId, inElse };
+    if (blocks[i].id === id) return { arr: blocks, index: i, parentId, inElse, elifIdx };
     const c = findBlockCtx(blocks[i].children, id, blocks[i].id, false);
     if (c) return c;
     const e = findBlockCtx(blocks[i].elseChildren, id, blocks[i].id, true);
     if (e) return e;
+    for (let j = 0; j < blocks[i].elifBranches.length; j++) {
+      const ef = findBlockCtx(blocks[i].elifBranches[j].children, id, blocks[i].id, false, j);
+      if (ef) return ef;
+    }
   }
   return null;
 }
@@ -180,6 +226,9 @@ function findAndRemove(blocks: Block[], id: string): boolean {
     }
     if (findAndRemove(blocks[i].children, id)) return true;
     if (findAndRemove(blocks[i].elseChildren, id)) return true;
+    for (const br of blocks[i].elifBranches) {
+      if (findAndRemove(br.children, id)) return true;
+    }
   }
   return false;
 }
@@ -196,8 +245,25 @@ function findAndUpdate(
     }
     if (findAndUpdate(block.children, id, params)) return true;
     if (findAndUpdate(block.elseChildren, id, params)) return true;
+    for (const br of block.elifBranches) {
+      if (findAndUpdate(br.children, id, params)) return true;
+    }
   }
   return false;
+}
+
+function deepCloneBlock(block: Block): Block {
+  return {
+    id: uuid(),
+    type: block.type,
+    params: { ...block.params },
+    children: block.children.map(deepCloneBlock),
+    elseChildren: block.elseChildren.map(deepCloneBlock),
+    elifBranches: block.elifBranches.map((br) => ({
+      condition: br.condition,
+      children: br.children.map(deepCloneBlock),
+    })),
+  };
 }
 
 function findAndMove(blocks: Block[], id: string, direction: 'up' | 'down'): boolean {
@@ -212,6 +278,9 @@ function findAndMove(blocks: Block[], id: string, direction: 'up' | 'down'): boo
   for (const block of blocks) {
     if (findAndMove(block.children, id, direction)) return true;
     if (findAndMove(block.elseChildren, id, direction)) return true;
+    for (const br of block.elifBranches) {
+      if (findAndMove(br.children, id, direction)) return true;
+    }
   }
   return false;
 }
@@ -221,6 +290,9 @@ export const useBlockStore = create<BlockStore>()(
     blocks: [],
     variables: [],
     variableSortMode: 'custom',
+    selectedBlockId: null,
+    clipboardBlock: null,
+    collapsedBlocks: {},
     _past: [],
     _future: [],
 
@@ -250,14 +322,14 @@ export const useBlockStore = create<BlockStore>()(
       });
     },
 
-    addBlock: (type, parentId, inElse = false) => {
+    addBlock: (type, parentId, inElse = false, elifIdx) => {
       set((state) => {
         snap(state);
         const newBlock = createBlock(type);
         if (!parentId) {
           state.blocks.push(newBlock);
         } else {
-          findAndAdd(state.blocks, parentId, newBlock, inElse);
+          findAndAdd(state.blocks, parentId, newBlock, inElse, elifIdx);
         }
       });
     },
@@ -268,21 +340,44 @@ export const useBlockStore = create<BlockStore>()(
         const a = findBlockCtx(state.blocks, activeId);
         const o = findBlockCtx(state.blocks, overId);
         if (!a || !o) return;
-        if (a.parentId !== o.parentId || a.inElse !== o.inElse) return;
+        if (a.parentId !== o.parentId || a.inElse !== o.inElse || a.elifIdx !== o.elifIdx) return;
         const [moved] = a.arr.splice(a.index, 1);
         a.arr.splice(o.index, 0, moved);
       });
     },
 
-    insertBlock: (type, index, parentId, inElse = false) => {
+    insertBlock: (type, index, parentId, inElse = false, elifIdx) => {
       set((state) => {
         snap(state);
         const newBlock = createBlock(type);
         if (!parentId) {
           state.blocks.splice(index, 0, newBlock);
         } else {
-          findAndInsert(state.blocks, parentId, newBlock, index, inElse);
+          findAndInsert(state.blocks, parentId, newBlock, index, inElse, elifIdx);
         }
+      });
+    },
+
+    addElifBranch: (blockId) => {
+      set((state) => {
+        snap(state);
+        const block = findBlock(state.blocks, blockId);
+        if (block) block.elifBranches.push({ condition: '', children: [] });
+      });
+    },
+
+    removeElifBranch: (blockId, idx) => {
+      set((state) => {
+        snap(state);
+        const block = findBlock(state.blocks, blockId);
+        if (block) block.elifBranches.splice(idx, 1);
+      });
+    },
+
+    updateElifCondition: (blockId, idx, condition) => {
+      set((state) => {
+        const block = findBlock(state.blocks, blockId);
+        if (block?.elifBranches[idx]) block.elifBranches[idx].condition = condition;
       });
     },
 
@@ -306,10 +401,64 @@ export const useBlockStore = create<BlockStore>()(
       });
     },
 
+    selectBlock: (id) => {
+      set((state) => { state.selectedBlockId = id; });
+    },
+
+    setCollapsed: (id, collapsed) => {
+      set((state) => {
+        if (collapsed) state.collapsedBlocks[id] = true;
+        else delete state.collapsedBlocks[id];
+      });
+    },
+
+    copyBlock: (id) => {
+      set((state) => {
+        const block = findBlock(state.blocks, id);
+        if (block) state.clipboardBlock = JSON.parse(JSON.stringify(block));
+      });
+    },
+
+    cutBlock: (id) => {
+      set((state) => {
+        snap(state);
+        const block = findBlock(state.blocks, id);
+        if (block) state.clipboardBlock = JSON.parse(JSON.stringify(block));
+        findAndRemove(state.blocks, id);
+        state.selectedBlockId = null;
+      });
+    },
+
+    pasteBlock: () => {
+      set((state) => {
+        if (!state.clipboardBlock) return;
+        snap(state);
+        const clone = deepCloneBlock(state.clipboardBlock as Block);
+        if (state.selectedBlockId) {
+          const ctx = findBlockCtx(state.blocks, state.selectedBlockId);
+          if (ctx) {
+            ctx.arr.splice(ctx.index + 1, 0, clone);
+            state.selectedBlockId = clone.id;
+            return;
+          }
+        }
+        state.blocks.push(clone);
+        state.selectedBlockId = clone.id;
+      });
+    },
+
     clearAll: () => {
       set((state) => {
         snap(state);
         state.blocks = [];
+      });
+    },
+
+    loadScript: (newBlocks, newVars) => {
+      set((state) => {
+        snap(state);
+        state.blocks = newBlocks;
+        state.variables = newVars.map((v) => ({ ...v, id: uuid() }));
       });
     },
 

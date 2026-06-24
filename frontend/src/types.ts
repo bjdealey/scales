@@ -90,7 +90,38 @@ export type BlockType =
   | 'for_each'
   | 'if_condition'
   | 'print'
-  | 'file_write';
+  | 'file_write'
+  | 'comment';
+
+// ── Structured condition builder ──────────────────────────────────────────────
+
+// 'is' = truthiness check (just the left value, no right operand)
+export type CompareOp = 'is' | '==' | '!=' | '>' | '<' | '>=' | '<=' | 'in' | 'not in';
+export type LogicOp  = 'and' | 'or';
+
+export interface ConditionClause {
+  not:   boolean;    // wrap clause with `not (...)`
+  left:  string;     // left operand (variable or literal)
+  op:    CompareOp;
+  right: string;     // right operand (ignored when op === 'is')
+}
+
+export interface ConditionExpr {
+  clauses: ConditionClause[];
+  joiners: LogicOp[];          // length === clauses.length - 1
+}
+
+export const DEFAULT_CONDITION_EXPR: ConditionExpr = {
+  clauses: [{ not: false, left: '', op: 'is', right: '' }],
+  joiners: [],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ElifBranch {
+  condition: string;   // JSON-serialised ConditionExpr
+  children: Block[];
+}
 
 export interface Block {
   id: string;
@@ -98,6 +129,7 @@ export interface Block {
   params: Record<string, string>;
   children: Block[];
   elseChildren: Block[];
+  elifBranches: ElifBranch[];
 }
 
 export const BLOCK_META: Record<
@@ -140,13 +172,20 @@ export const BLOCK_META: Record<
     borderColor: 'border-rose-500',
     isContainer: false,
   },
+  comment: {
+    label: 'Comment',
+    color: 'bg-zinc-600',
+    borderColor: 'border-zinc-500',
+    isContainer: false,
+  },
 };
 
 export const BLOCK_DEFAULTS: Record<BlockType, Record<string, string>> = {
   http_request: { method: 'GET', url: '', varName: 'response', params: '', headers: '', json: '', data: '', files: '', cookies: '', auth: '' },
   set_variable: { name: '', value: '' },
   for_each: { itemVar: 'item', iterable: '' },
-  if_condition: { condition: '' },
+  if_condition: { conditionExpr: JSON.stringify(DEFAULT_CONDITION_EXPR) },
   print: { expression: '' },
   file_write: { path: '', content: '' },
+  comment: { text: '' },
 };

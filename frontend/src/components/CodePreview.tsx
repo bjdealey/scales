@@ -64,14 +64,14 @@ export default function CodePreview() {
   };
 
   return (
-    <aside className="w-full h-full bg-gray-900 flex flex-col overflow-hidden">
-      <div className="px-3 py-1.5 border-b border-gray-700 flex items-center justify-between flex-shrink-0">
+    <aside className="w-full h-full flex flex-col overflow-hidden" style={{ background: 'var(--elevated)' }}>
+      <div className="px-3 py-1.5 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: 'var(--brd)' }}>
         <div className="flex items-center gap-1.5">
-          <Palette size={12} className="text-gray-500 flex-shrink-0" />
+          <Palette size={12} className="flex-shrink-0" style={{ color: 'var(--tx-3)' }} />
           <select
             value={editorTheme}
             onChange={(e) => setEditorTheme(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded text-xs text-gray-400 px-1.5 py-1 focus:outline-none focus:border-blue-400 cursor-pointer"
+            className="sk-select rounded text-xs px-1.5 py-1"
           >
             {GROUPS.map((group) => (
               <optgroup key={group} label={group}>
@@ -84,7 +84,8 @@ export default function CodePreview() {
         </div>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 transition-colors"
+          className="flex items-center gap-1.5 text-xs px-2 py-1 rounded hover:bg-black/[0.05] dark:hover:bg-white/10 transition-colors"
+          style={{ color: 'var(--tx-2)' }}
         >
           {copied ? <Check size={12} /> : <Copy size={12} />}
           {copied ? 'Copied' : 'Copy'}
