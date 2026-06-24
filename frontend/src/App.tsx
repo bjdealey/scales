@@ -88,7 +88,7 @@ export default function App() {
   /* ── Mobile layout ── */
   if (isMobile) {
     return (
-      <div className="h-screen flex flex-col bg-gray-950 text-white overflow-hidden select-none">
+      <div className="h-dvh flex flex-col bg-gray-950 text-white overflow-hidden select-none">
         <header className="h-11 bg-gray-900 border-b border-gray-700 flex items-center justify-center gap-2 flex-shrink-0">
           <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center flex-shrink-0">
             <Zap size={12} className="text-white" />
