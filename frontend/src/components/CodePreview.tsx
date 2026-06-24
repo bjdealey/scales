@@ -95,7 +95,7 @@ export default function CodePreview() {
       <div className="px-3 py-2 border-b border-gray-700 flex items-center justify-between flex-shrink-0">
         <div>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Your Python Script</p>
-          <p className="text-xs text-gray-600">Assembles as you add scales</p>
+          <p className="text-xs text-gray-600">Assembles as you add actions</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5">

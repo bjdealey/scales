@@ -1,6 +1,5 @@
-import { Zap } from 'lucide-react';
 import { useBlockStore } from '../store/blockStore';
-import BlockNode, { InsertBlockMenu } from './BlockNode';
+import BlockNode, { InsertBlockMenu, AddBlockMenu } from './BlockNode';
 
 export default function Canvas() {
   const blocks = useBlockStore((s) => s.blocks);
@@ -11,7 +10,7 @@ export default function Canvas() {
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] flex-shrink-0">
         <div>
           <p className="text-sm font-semibold text-white/70">Canvas</p>
-          <p className="text-xs text-white/30">{blocks.length} scale{blocks.length !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-white/30">{blocks.length} action{blocks.length !== 1 ? 's' : ''}</p>
         </div>
         {blocks.length > 0 && (
           <button
@@ -25,17 +24,13 @@ export default function Canvas() {
 
       <div className="flex-1 p-6">
         {blocks.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center">
-            <div
-              className="w-16 h-16 rounded-3xl flex items-center justify-center mb-4 border border-white/[0.10]"
-              style={{ background: 'rgba(255,255,255,0.05)' }}
-            >
-              <Zap size={28} className="text-white/30" />
+          <div className="h-full flex flex-col items-center justify-center">
+            <div className="w-full max-w-xs">
+              <AddBlockMenu />
+              <p className="text-white/25 text-xs text-center mt-3">
+                Your Python script assembles here as you add actions
+              </p>
             </div>
-            <p className="text-white/50 font-semibold mb-1">No scales yet</p>
-            <p className="text-white/30 text-sm max-w-xs">
-              Add a scale from the left panel — your Python script assembles here as you go
-            </p>
           </div>
         ) : (
           <div className="w-full max-w-3xl mx-auto">

@@ -35,7 +35,7 @@ type Tab = 'blocks' | 'variables';
 
 const TAB_LABELS: Record<Tab, string> = {
   variables: 'Variables',
-  blocks: 'Scales',
+  blocks: 'Actions',
 };
 
 export default function BlockPalette() {
@@ -81,7 +81,7 @@ export default function BlockPalette() {
       ) : (
         <>
           <div className="px-3 pb-2 flex-shrink-0">
-            <p className="text-xs text-white/25">Click a scale to add it to your script</p>
+            <p className="text-xs text-white/25">Click an action to add it to your script</p>
           </div>
           <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2">
             {BLOCK_TYPES.map((type) => {

@@ -498,7 +498,7 @@ export function InsertBlockMenu({ index, parentId, inElse }: { index: number; pa
   );
 }
 
-function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolean }) {
+export function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolean }) {
   const [open, setOpen]   = useState(false);
   const [query, setQuery] = useState('');
   const addBlock   = useBlockStore((s) => s.addBlock);
