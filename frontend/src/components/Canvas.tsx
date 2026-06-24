@@ -41,8 +41,8 @@ export default function Canvas() {
           <div className="max-w-2xl">
             {blocks.map((block, i) => (
               <div key={block.id}>
-                {i > 0 && <InsertBlockMenu index={i} />}
                 <BlockNode block={block} />
+                <InsertBlockMenu index={i + 1} />
               </div>
             ))}
           </div>
