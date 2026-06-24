@@ -105,7 +105,7 @@ function VarPicker({
 }) {
   const variables = useBlockStore((s) => s.variables);
   const [open, setOpen] = useState(false);
-  const anchorRef = useRef<HTMLButtonElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const filtered = variables.filter(
@@ -125,27 +125,41 @@ function VarPicker({
   }, [open]);
 
   return (
-    <div className="flex-1 min-w-0">
-      <button
-        ref={anchorRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={`w-full flex items-center gap-1.5 bg-white/[0.08] border border-white/10 rounded-lg px-2 py-1 text-xs transition-colors hover:bg-white/[0.12] focus:outline-none focus:border-blue-400/70 ${
-          selected ? 'text-white' : 'text-white/30'
-        }`}
+    <div ref={anchorRef} className="flex-1 min-w-0">
+      {/* Styled container holding the trigger + optional × — avoids button-in-button */}
+      <div
+        className={`flex items-center bg-white/[0.08] border rounded-lg text-xs transition-colors ${
+          open ? 'border-blue-400/70' : 'border-white/10 hover:bg-white/[0.12]'
+        } ${selected ? 'text-white' : 'text-white/30'}`}
       >
-        {selected ? (
-          <>
-            <span className={`text-[10px] px-1 py-px rounded-full font-medium flex-shrink-0 ${TYPE_BADGE[selected.type]}`}>
-              {TYPE_LABELS[selected.type]}
-            </span>
-            <span className="font-mono flex-1 text-left truncate">{selected.name}</span>
-          </>
-        ) : (
-          <span className="flex-1 text-left">{placeholder}</span>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 focus:outline-none"
+        >
+          {selected ? (
+            <>
+              <span className={`text-[10px] px-1 py-px rounded-full font-medium flex-shrink-0 ${TYPE_BADGE[selected.type]}`}>
+                {TYPE_LABELS[selected.type]}
+              </span>
+              <span className="font-mono flex-1 text-left truncate min-w-0">{selected.name}</span>
+            </>
+          ) : (
+            <span className="flex-1 text-left">{placeholder}</span>
+          )}
+          <ChevronDown size={10} className="flex-shrink-0 text-white/30" />
+        </button>
+        {selected && (
+          <button
+            type="button"
+            onClick={() => { onChange(''); setOpen(false); }}
+            title="Remove variable"
+            className="flex-shrink-0 px-1.5 py-1 text-white/25 hover:text-red-400 transition-colors border-l border-white/10"
+          >
+            <X size={10} />
+          </button>
         )}
-        <ChevronDown size={10} className="flex-shrink-0 text-white/30" />
-      </button>
+      </div>
 
       <DropdownPortal anchorRef={anchorRef} contentRef={contentRef} open={open}>
         <div className="rounded-xl overflow-hidden" style={DROPDOWN_STYLE}>
@@ -176,6 +190,91 @@ function VarPicker({
           )}
         </div>
       </DropdownPortal>
+    </div>
+  );
+}
+
+// Value-mode input that offers to save its content as a new variable
+function ValInputWithSaveAs({
+  value,
+  onChange,
+  onCreateVar,
+  placeholder,
+  suggestedType = 'str',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onCreateVar: (name: string) => void;
+  placeholder?: string;
+  suggestedType?: PythonType;
+}) {
+  const addVariableWithName = useBlockStore((s) => s.addVariableWithName);
+  const [naming, setNaming] = useState(false);
+  const [varName, setVarName] = useState('');
+
+  const handleCreate = () => {
+    if (!varName.trim()) return;
+    // Pass the current literal value so the new variable is pre-filled
+    addVariableWithName(varName.trim(), suggestedType, value.trim());
+    onCreateVar(varName.trim());
+    setNaming(false);
+    setVarName('');
+  };
+
+  const cancel = () => { setNaming(false); setVarName(''); };
+
+  if (naming) {
+    return (
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <input
+          autoFocus
+          value={varName}
+          onChange={(e) => setVarName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleCreate();
+            if (e.key === 'Escape') cancel();
+          }}
+          placeholder="variable_name"
+          className={`${INPUT_CLS} flex-1 font-mono`}
+          spellCheck={false}
+        />
+        <button
+          type="button"
+          onClick={handleCreate}
+          disabled={!varName.trim()}
+          className="text-[11px] px-2 py-1 rounded-lg bg-blue-600/60 hover:bg-blue-500/80 disabled:opacity-40 text-white flex-shrink-0 font-medium border border-blue-500/40 transition-colors"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={cancel}
+          className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
+        >
+          <X size={12} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`${INPUT_CLS} flex-1`}
+      />
+      {value.trim() && (
+        <button
+          type="button"
+          onClick={() => setNaming(true)}
+          title="Save as a variable"
+          className="flex-shrink-0 text-[10px] font-medium px-1.5 py-px rounded-md border bg-white/[0.06] border-white/10 text-white/30 hover:text-white/60 hover:bg-white/10 transition-all whitespace-nowrap"
+        >
+          + var
+        </button>
+      )}
     </div>
   );
 }
@@ -335,7 +434,7 @@ function BlockParams({ block }: { block: Block }) {
   const varOrInput = (
     fieldName: string,
     def: FieldMode,
-    opts: { types?: PythonType[]; placeholder?: string } = {},
+    opts: { types?: PythonType[]; placeholder?: string; suggestedType?: PythonType } = {},
   ) => {
     if (getMode(fieldName, def) === 'var') {
       return (
@@ -348,11 +447,14 @@ function BlockParams({ block }: { block: Block }) {
       );
     }
     return (
-      <input
+      <ValInputWithSaveAs
         value={block.params[fieldName] || ''}
-        onChange={up(fieldName)}
+        onChange={(v) => set(fieldName, v)}
+        onCreateVar={(name) =>
+          updateBlock(block.id, { [`${fieldName}_mode`]: 'var', [fieldName]: name })
+        }
         placeholder={opts.placeholder}
-        className={`${INPUT_CLS} flex-1`}
+        suggestedType={opts.suggestedType || 'str'}
       />
     );
   };
@@ -370,7 +472,7 @@ function BlockParams({ block }: { block: Block }) {
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>URL</span>
             {modeBtn('url', 'literal')}
-            {varOrInput('url', 'literal', { types: ['str', 'Any'], placeholder: 'api.example.com/v1/endpoint' })}
+            {varOrInput('url', 'literal', { types: ['str', 'Any'], placeholder: 'api.example.com/v1/endpoint', suggestedType: 'str' })}
           </div>
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>Save as</span>
@@ -380,7 +482,7 @@ function BlockParams({ block }: { block: Block }) {
             <div className={ROW_CLS}>
               <span className={LABEL_CLS}>Body</span>
               {modeBtn('body', 'var')}
-              {varOrInput('body', 'var', { types: ['dict', 'Any'], placeholder: '{"key": "value"}' })}
+              {varOrInput('body', 'var', { types: ['dict', 'Any'], placeholder: '{"key": "value"}', suggestedType: 'Any' })}
             </div>
           )}
         </div>
@@ -396,7 +498,7 @@ function BlockParams({ block }: { block: Block }) {
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>Value</span>
             {modeBtn('value', 'var')}
-            {varOrInput('value', 'var', { placeholder: '"hello" or expression' })}
+            {varOrInput('value', 'var', { placeholder: '"hello" or expression', suggestedType: 'Any' })}
           </div>
         </div>
       );
@@ -416,7 +518,7 @@ function BlockParams({ block }: { block: Block }) {
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>in</span>
             {modeBtn('iterable', 'var')}
-            {varOrInput('iterable', 'var', { types: ['list', 'dict', 'Any'], placeholder: 'my_list or expression' })}
+            {varOrInput('iterable', 'var', { types: ['list', 'dict', 'Any'], placeholder: 'my_list or expression', suggestedType: 'list' })}
           </div>
         </div>
       );
@@ -426,7 +528,7 @@ function BlockParams({ block }: { block: Block }) {
         <div className={`${ROW_CLS} mt-2`}>
           <span className="text-white/35 text-xs font-mono flex-shrink-0">if</span>
           {modeBtn('condition', 'var')}
-          {varOrInput('condition', 'var', { types: ['bool', 'Any'], placeholder: 'response.ok' })}
+          {varOrInput('condition', 'var', { types: ['bool', 'Any'], placeholder: 'response.ok', suggestedType: 'Any' })}
           <span className="text-white/35 text-xs font-mono flex-shrink-0">:</span>
         </div>
       );
@@ -436,7 +538,7 @@ function BlockParams({ block }: { block: Block }) {
         <div className={`${ROW_CLS} mt-2`}>
           <span className="text-white/35 text-xs font-mono flex-shrink-0">print(</span>
           {modeBtn('expression', 'var')}
-          {varOrInput('expression', 'var', { placeholder: 'Hello, world!' })}
+          {varOrInput('expression', 'var', { placeholder: 'Hello, world!', suggestedType: 'str' })}
           <span className="text-white/35 text-xs font-mono flex-shrink-0">)</span>
         </div>
       );
@@ -447,12 +549,12 @@ function BlockParams({ block }: { block: Block }) {
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>Path</span>
             {modeBtn('path', 'literal')}
-            {varOrInput('path', 'literal', { types: ['str', 'Any'], placeholder: 'output.txt' })}
+            {varOrInput('path', 'literal', { types: ['str', 'Any'], placeholder: 'output.txt', suggestedType: 'str' })}
           </div>
           <div className={ROW_CLS}>
             <span className={LABEL_CLS}>Content</span>
             {modeBtn('content', 'var')}
-            {varOrInput('content', 'var', { placeholder: 'data to write' })}
+            {varOrInput('content', 'var', { placeholder: 'data to write', suggestedType: 'str' })}
           </div>
         </div>
       );

@@ -14,7 +14,7 @@ interface BlockStore {
   moveBlock: (id: string, direction: 'up' | 'down') => void;
   clearAll: () => void;
   addVariable: () => void;
-  addVariableWithName: (name: string, type: PythonType) => void;
+  addVariableWithName: (name: string, type: PythonType, initialValue?: string) => void;
   removeVariable: (id: string) => void;
   updateVariable: (id: string, patch: Partial<Omit<Variable, 'id'>>) => void;
   moveVariable: (id: string, direction: 'up' | 'down') => void;
@@ -164,13 +164,13 @@ export const useBlockStore = create<BlockStore>()(
       });
     },
 
-    addVariableWithName: (name: string, type: PythonType) => {
+    addVariableWithName: (name: string, type: PythonType, initialValue?: string) => {
       set((state) => {
         state.variables.push({
           id: uuid(),
           name,
           type,
-          value: TYPE_DEFAULTS[type],
+          value: initialValue ?? TYPE_DEFAULTS[type],
           items: [],
           entries: [],
           locked: false,
