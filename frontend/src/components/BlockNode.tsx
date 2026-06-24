@@ -417,17 +417,26 @@ function OutputVarField({
 }
 
 function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const addBlock    = useBlockStore((s) => s.addBlock);
-  const anchorRef   = useRef<HTMLDivElement>(null);
-  const contentRef  = useRef<HTMLDivElement>(null);
+  const [open, setOpen]       = useState(false);
+  const [query, setQuery]     = useState('');
+  const addBlock   = useBlockStore((s) => s.addBlock);
+  const anchorRef  = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const inputRef   = useRef<HTMLInputElement>(null);
+
+  const filtered = BLOCK_TYPES.filter((type) =>
+    BLOCK_META[type].label.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  const close = () => { setOpen(false); setQuery(''); };
 
   useEffect(() => {
     if (!open) return;
+    // Focus search input when dropdown opens
+    requestAnimationFrame(() => inputRef.current?.focus());
     const handler = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (!anchorRef.current?.contains(t) && !contentRef.current?.contains(t))
-        setOpen(false);
+      if (!anchorRef.current?.contains(t) && !contentRef.current?.contains(t)) close();
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -449,21 +458,40 @@ function AddBlockMenu({ parentId, inElse }: { parentId?: string; inElse?: boolea
 
       <DropdownPortal anchorRef={anchorRef} contentRef={contentRef} open={open}>
         <div className="rounded-xl overflow-hidden" style={DROPDOWN_STYLE}>
+          <div className="p-2 border-b border-white/[0.06]">
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') close();
+                if (e.key === 'Enter' && filtered.length === 1) {
+                  addBlock(filtered[0], parentId, inElse);
+                  close();
+                }
+              }}
+              placeholder="Search actions..."
+              className="w-full bg-white/[0.06] rounded-lg px-2 py-1 text-xs text-white placeholder-white/25 focus:outline-none focus:bg-white/[0.10] transition-colors font-mono"
+              spellCheck={false}
+            />
+          </div>
           <div className="py-1">
-            {BLOCK_TYPES.map((type) => {
+            {filtered.length > 0 ? filtered.map((type) => {
               const meta = BLOCK_META[type];
               return (
                 <button
                   key={type}
                   type="button"
-                  onClick={() => { addBlock(type, parentId, inElse); setOpen(false); }}
+                  onClick={() => { addBlock(type, parentId, inElse); close(); }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/[0.06] transition-colors"
                 >
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.color}`} />
                   <span className="text-xs text-white">{meta.label}</span>
                 </button>
               );
-            })}
+            }) : (
+              <p className="px-3 py-2 text-[11px] text-white/25">No matching actions</p>
+            )}
           </div>
         </div>
       </DropdownPortal>
